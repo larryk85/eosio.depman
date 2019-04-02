@@ -1,6 +1,6 @@
 ### version, optional build system type
 [dependencies]
-cmake : [3.4, autoconf]
+cmake : [3.20, autoconf]
 llvm4 : [4.0, cmake]
 
 ### urls for dependency sources

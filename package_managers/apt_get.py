@@ -2,6 +2,7 @@ from package_manager import package_manager
 from logger import err, warn, log
 from util import execute_cmd
 from dependency import version
+import os
 
 class apt_get(package_manager):
     def strip_pre(self, s):
@@ -34,5 +35,7 @@ class apt_get(package_manager):
 
     def install_dependency(self, dep):
         log.log("Installing "+dep.name+" "+dep.package_name)
-        eo, ee, ec = execute_cmd( "sudo apt-get install "+dep.package_name )
+        if (os.getuid() != 0):
+            err.log("Installing via apt-get requires sudo!")
+        eo, ee, ec = execute_cmd( "apt-get --yes install "+dep.package_name )
         return ec == 0

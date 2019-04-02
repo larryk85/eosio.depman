@@ -1,123 +1,13 @@
-#! /usr/local/bin/python3
+#! /usr/bin/env python3
 
-import sys, os, subprocess, platform, distro
-import tarfile, zipfile 
+import sys, os, subprocess, platform, distro, pickle
 import urllib.request, shutil, argparse, json, re
 from logger import err, warn, log
-from util import execute_cmd, execute_cmd_dump_output, strip, str_to_class, get_os, get_temp_dir, get_install_dir, get_file_dir, get_package_manager_name
+from util import strip, str_to_class, get_os, get_temp_dir, get_install_dir, get_file_dir, get_package_manager_name
 from dependency import dependency, installed_dependency, version
 from package_manager import package_manager, import_package_managers
-
-### interface for build systems
-class build_system:
-    def pre_build(self, dep, cmds):
-        pass
-    def build(self, dep, cmds):
-        pass
-    def install(self, dep, cmds):
-        pass
-
-### implementation for pre-built sources
-class noop_build_system:
-    def pre_build(self, dep, cmds):
-        pass
-    def build(self, dep, cmds):
-        pass
-    def install(self, dep, cmds):
-        log.log("install step for "+dep.name)
-
-### concrete implementation for autoconf
-class autoconf(build_system):
-    def pre_build(self, dep):
-        log.log("autoconf : pre-build step for "+dep.name)
-        return execute_cmd_dump_output("../configure --prefix="+get_temp_dir()+"/"+dep.name+".tmp "+dep.pre_build_cmds)
-
-    def build(self, dep):
-        log.log("autoconf : build step for "+dep.name)
-        return execute_cmd_dump_output("make -j "+dep.build_cmds)
-
-    def install(self, dep):
-        log.log("autoconf : install step for "+dep.name)
-        return execute_cmd_dump_output("make install "+dep.install_cmds)
-
-### concrete implementation for autoconf
-class cmake(build_system):
-    def pre_build(self, dep):
-        log.log("cmake : pre-build step for "+dep.name)
-        return execute_cmd_dump_output("cmake .. -DCMAKE_INSTALL_PREFIX="+get_temp_dir()+"/"+dep.name+".tmp "+dep.pre_build_cmds)
-
-    def build(self, dep):
-        log.log("cmake : build step for "+dep.name)
-        return execute_cmd_dump_output("make -j "+dep.build_cmds)
-
-    def install(self, dep):
-        log.log("cmake : install step for "+dep.name)
-        return execute_cmd_dump_output("make install "+dep.install_cmds)
-
-class source_builder:
-    def build(self, dep):
-        old_cwd = os.getcwd()
-        tmpd = get_temp_dir()+"/"+dep.name
-        full_dir = tmpd+"/"+os.listdir(tmpd)[0]
-        os.chdir( full_dir )
-        try:
-            os.mkdir( full_dir+"/build" )
-        except:
-            pass
-        os.chdir( "./build" )
-        builder = None
-        if len(dep.bin_url) > 0:
-            builder = noop_build_system()
-        else:
-            builder = str_to_class(dep.build_sys)()
-        
-        if not builder.pre_build(dep):
-            shutil.rmtree(tmpd)
-            err.log("Pre-build stage for "+dep.name+" failed!")
-        if not builder.build(dep):
-            shutil.rmtree(tmpd)
-            err.log("Build stage for "+dep.name+" failed!")
-
-        os.chdir( old_cwd )
-        return lambda : shutil.rmtree(tmpd)
-    
-    def install(self, dep, prefix):
-        tmpd = get_temp_dir()+"/"+dep.name
-        old_cwd = os.getcwd()
-        tmpd = get_temp_dir()+"/"+dep.name
-        full_dir = tmpd+"/"+os.listdir(tmpd)[0]+"/build"
-        os.chdir( full_dir )
-        builder = str_to_class(dep.build_sys)()
-        if not builder.install(dep):
-            shutil.rmtree(tmpd)
-            shutil.rmtree(get_temp_dir()+"/"+dep.name)
-            err.log("Install stage for "+dep.name+" failed!")
-        os.chdir( old_cwd )
-        filenames = list()
-        old_filenames = list()
-        for path, subdirs, files in os.walk(tmpd+".tmp"):
-            for fn in files:
-                full_path = os.path.join(path, fn)
-                rel_path  = os.path.relpath(full_path, tmpd+".tmp")
-                fixed_path = os.path.join(prefix, rel_path)
-                filenames.append(fixed_path)
-                old_filenames.append(full_path)
-        
-        ### for now ignore errors when making the prefix folder
-        try:
-            os.makedirs( prefix )
-        except:
-            pass
-
-        installed_dep = installed_dependency( prefix, filenames )
-        for i in range(0, len(filenames)):
-            try:
-                os.makedirs( os.path.dirname( filenames[i] ) )
-            except:
-                pass
-            ### install to the prefix
-            shutil.move( old_filenames[i], filenames[i] )
-        return lambda : shutil.rmtree(tmpd+".tmp")
+from build_system import build_system, import_build_systems
+from source_builder import source_builder
 
 class dependency_handler:
     comment_re = re.compile("#")
@@ -129,6 +19,7 @@ class dependency_handler:
     temp_dir      = get_temp_dir()
     prefix        = ""
     deps_filename = "eosio.deps"
+    installed_deps = list()
 
     def download_dependency_and_unpack( self, dep, use_bin ):
         log.log("Downloading "+dep.name)
@@ -164,7 +55,7 @@ class dependency_handler:
                         cleanup_build   = sb.build( dep )
                         cleanup_install = sb.install( dep, self.prefix )
                         cleanup_build()
-                        cleanup_install()
+                        self.installed_deps.append(cleanup_install())
             elif res == package_manager.not_satisfiable:
                 warn.log( "Dependency ("+dep.name+" : "+dep.version.to_string()+") not satisfiable, doing a source install!" )
                 self.download_dependency_and_unpack( dep, len(dep.bin_url) > 0 )
@@ -172,15 +63,21 @@ class dependency_handler:
                 cleanup_build   = sb.build( dep )
                 cleanup_install = sb.install( dep, self.prefix )
                 cleanup_build()
-                cleanup_install()
+                self.installed_deps.append(cleanup_install())
 
             else:
                 err.log("Dependency ("+dep.name+") installed but version is too low ("+packman.get_version(dep).to_string()+")")
 
+    def write_installed_deps_file( self ):
+        deps_file = open("__deps", "wb")
+        pickle.dump( self.installed_deps, deps_file )
+    
+    def read_installed_deps_file( self ):
+        deps_file = open("__deps", "rb")
+        ids = pickle.load(deps_file)
+        for i in ids:
+            print(i)
     def read_dependency_file( self, dep_fname ):
-        print(get_os()[0])
-        print(get_os()[1])
-        print(get_os()[2])
         dep_file = open( dep_fname, "r" )
         mode = 0
         tag_name = ""
@@ -273,6 +170,8 @@ class dependency_handler:
     def __init__(self, pfx):
         import_package_managers()
         self.prefix = os.path.abspath(os.path.realpath(os.path.expanduser(pfx)))
+        if os.stat(self.prefix).st_uid != os.getuid():
+            err.log("Prefix for installation <"+self.prefix+"> needs root access, use sudo")
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manager for dependencies")
@@ -280,6 +179,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     handler = dependency_handler( args.prefix )
     handler.check_dependencies()
+    handler.write_installed_deps_file()
+    handler.read_installed_deps_file()
 
 #    try:
 #        handler = dependency_handler()

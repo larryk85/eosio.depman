@@ -1,3 +1,18 @@
+from json import JSONEncoder, JSONDecoder, dumps
+
+class dependency_encoder(JSONEncoder):
+    def default(self, o):
+        return o.__dict__
+
+def serialize( installed_dep ):
+    return dumps(installed_dep, cls=dependency_encoder)
+
+def from_json( jo ):
+    return installed_dependency( jo["dep"], jo["provided"], jo["path"], jo["files"])
+
+def deserialize( js ):
+    return JSONDecoder(object_hook = from_json).decode(js)
+
 class dependency:
     def __init__(self, nm, vs, pn, bs, su, bu, pbc, bc, ic):
         self.name         = nm
@@ -26,12 +41,16 @@ class dependency:
     install_cmds     = ""
 
 class installed_dependency:
-    def __init__(self, p, fs):
-        path = p
-        files = fs
+    def __init__(self, d, prov, p, fs):
+        dep      = d
+        provided = prov
+        path     = p
+        files    = fs
 
-    path  = ""
-    files = list()
+    dep      = None
+    provided = False
+    path     = ""
+    files    = list()
 
 class version:
     def __init__(self, major, minor, patch):

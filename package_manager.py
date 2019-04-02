@@ -34,9 +34,13 @@ def import_package_managers():
         try:
             for pm in package_managers:
                 cur_pm = pm
-                imp.load_source(pm[:-3], os.path.join(prefix, pm))
-        except ex:
+                f, p, d = imp.find_module(pm[:-3], [prefix])
+                imp.load_module(pm[:-3], f, p, d)
+        except Exception as ex:
             warn.log(str(ex))
+            raise ex
             err.log("Failed to import package manager <"+cur_pm+">")
-    except:
+    except Exception as ex:
+        warn.log(str(ex))
+        raise ex
         err.log("Failed to open package managers directory")
