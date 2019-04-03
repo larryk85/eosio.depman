@@ -2,7 +2,6 @@
 
 import sys, os, subprocess, platform, distro, pickle
 import urllib.request, shutil, argparse, json, re
-import cleanup
 from logger import err, warn, log
 from util import strip, str_to_class, get_os, get_temp_dir, get_install_dir, get_file_dir, get_package_manager_name, is_owner_for_dir
 from dependency import dependency, installed_dependency, version
@@ -13,14 +12,13 @@ from source_builder import source_builder
 class dependency_handler:
     comment_re = re.compile("#")
     tag_re     = re.compile("\[.*\]")
-    
     dependencies      = list()
     tagged_deps       = dict()
     deps_dict         = dict()
     temp_dir          = get_temp_dir()
     prefix            = ""
     deps_filename     = "eosio.deps"
-    installed_deps    = list()
+    installed_deps    = dict()
     
     def download_dependency_and_unpack( self, dep, use_bin ):
         log.log("Downloading "+dep.name)
@@ -38,12 +36,14 @@ class dependency_handler:
 
     def check_dependencies( self ):
         packman = str_to_class(get_package_manager_name())()
-        print (packman)
 
         self.read_dependency_file( self.deps_filename )
 
         for dep in self.dependencies:
             print("Checking dep "+dep.name)
+            if dep.name in self.installed_deps:
+                log.log("Dependency ("+dep.name+") found!")
+                continue
             res = packman.check_dependency( dep )
             if res == package_manager.installed:
                 log.log("Dependency ("+dep.name+") found!")
@@ -54,27 +54,30 @@ class dependency_handler:
                         self.download_dependency_and_unpack( dep, len(dep.bin_url) > 0 )
                         sb = source_builder()
                         sb.build( dep )
-                        self.installed_deps.append(sb.install( dep, self.prefix ))
+                        installed = sb.install( dep, self.prefix )
+                        self.installed_deps[dep.name] = installed
             elif res == package_manager.not_satisfiable:
                 warn.log( "Dependency ("+dep.name+" : "+dep.version.to_string()+") not satisfiable, doing a source install!" )
                 self.download_dependency_and_unpack( dep, len(dep.bin_url) > 0 )
                 sb = source_builder()
                 sb.build( dep )
-                self.installed_deps.append(sb.install( dep, self.prefix ))
+                installed = sb.install( dep, self.prefix )
+                self.installed_deps[dep.name] = installed
             else:
                 err.log("Dependency ("+dep.name+") installed but version is too low ("+packman.get_version(dep).to_string()+")")
 
     def write_installed_deps_file( self ):
         deps_file = open("__deps", "wb")
-        for i in self.installed_deps:
-            print(i.dep.name)
-        print(pickle.dumps( self.installed_deps)) #, deps_file ))
+        pickle.dump( self.installed_deps, deps_file )
+        deps_file.close()
     
     def read_installed_deps_file( self ):
-        deps_file = open("__deps", "rb")
-        ids = pickle.load(deps_file)
-        for i in ids:
-            print(i)
+        try:
+            deps_file = open("__deps", "rb")
+            self.installed_deps = pickle.load(deps_file)
+            deps_file.close()
+        except:
+            pass
 
     def read_dependency_file( self, dep_fname ):
         dep_file = open( dep_fname, "r" )
@@ -178,16 +181,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manager for dependencies")
     parser.add_argument('--prefix', type=str, dest='prefix', default="/usr/local")
     args = parser.parse_args()
-    handler = dependency_handler( args.prefix )
-    handler.check_dependencies()
-    handler.write_installed_deps_file()
-    handler.read_installed_deps_file()
-    exit(0)
     try:
         handler = dependency_handler( args.prefix )
+        handler.read_installed_deps_file()
         handler.check_dependencies()
         handler.write_installed_deps_file()
-        handler.read_installed_deps_file()
     except Exception as ex:
         warn.log(str(ex))
         err.log("Critical failure")

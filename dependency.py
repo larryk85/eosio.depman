@@ -44,10 +44,10 @@ class dependency:
 
 class installed_dependency:
     def __init__(self, d, prov, p, fs):
-        dep      = d
-        provided = prov
-        path     = p
-        files    = fs
+        self.dep      = d
+        self.provided = prov
+        self.path     = p
+        self.files    = fs
 
     dep      = None
     provided = False

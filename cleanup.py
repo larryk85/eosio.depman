@@ -1,15 +1,16 @@
 import atexit
-cleanup_routine = lambda _ : print("Cleaning up")
+cleanup_routines = [ lambda : print("cleaning up") ]
 
 def register_cleanup_routine( cr ):
     global cleanup_routine
-    prev = cleanup_routine
-    new = lambda _ : cr()
-    cleanup_routine = lambda _ : prev(new())
+    cleanup_routines.append( cr )
 
 def cleanup():
+    global cleanup_routines
     try:
-        cleanup_routine(None)
+        print(len(cleanup_routines))
+        for f in cleanup_routines:
+           f() 
     except:
         pass
 

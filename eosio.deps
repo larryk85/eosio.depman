@@ -2,7 +2,7 @@
 [dependencies]
 cmake : [3.12, autoconf]
 #llvm4 : [14.0, cmake]
-llvm4 : [14.0, cmake_ninja]
+#llvm4 : [14.0, cmake_ninja]
 
 ### urls for dependency sources
 # 2 pre defined identifiers `source` and `bin` these are used for either source locations or pre-built
@@ -10,17 +10,17 @@ llvm4 : [14.0, cmake_ninja]
 [urls]
 cmake : [source:all : https://github.com/Kitware/CMake/releases/download/v3.13.4/cmake-3.13.4.tar.gz]
 #cmake : [bin:Ubuntu<16.04> : https://
-llvm4 : [source:all : https://github.com/llvm/llvm-project/archive/llvmorg-4.0.1.zip]
-llvm4 : [bin:Ubuntu : https://releases.llvm.org/4.0.1/clang+llvm-4.0.1-x86_64-linux-gnu-debian8.tar.xz]
+#llvm4 : [source:all : https://github.com/llvm/llvm-project/archive/llvmorg-4.0.1.zip]
+#llvm4 : [bin:Ubuntu : https://releases.llvm.org/4.0.1/clang+llvm-4.0.1-x86_64-linux-gnu-debian8.tar.xz]
 
 ### listing for package names
 [packages]
 cmake : [all:cmake]
-llvm4 : [Ubuntu:llvm-4.0, OSX:llvm@4]
+#llvm4 : [Ubuntu:llvm-4.0, OSX:llvm@4]
 
 ### build commands, install commands
 [commands]
-llvm4 : [pre_build:all:"../llvm"]
+#llvm4 : [pre_build:all:"../llvm"]
 
 [system]
 cmake

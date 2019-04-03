@@ -11,7 +11,6 @@ class source_builder:
     
     def check_install(self, installed_files):
         for f in installed_files:
-            print(f)
             if os.path.isfile(f):
                 return True
         return False
@@ -19,6 +18,7 @@ class source_builder:
     def build(self, dep):
         old_cwd = os.getcwd()
         tmpd = get_temp_dir()+"/"+dep.name
+        register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
         full_dir = tmpd+"/"+os.listdir(tmpd)[0]
         os.chdir( full_dir )
         try:
@@ -33,24 +33,21 @@ class source_builder:
             builder = str_to_class(dep.build_sys)()
         
         if not builder.pre_build(dep):
-            register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
             err.log("Pre-build stage for "+dep.name+" failed!")
         if not builder.build(dep):
-            register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
             err.log("Build stage for "+dep.name+" failed!")
 
         os.chdir( old_cwd )
     
     def install(self, dep, prefix):
-        tmpd = get_temp_dir()+"/"+dep.name
         old_cwd = os.getcwd()
         tmpd = get_temp_dir()+"/"+dep.name
+        register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
+        register_cleanup_routine( lambda : shutil.rmtree(tmpd+".tmp") )
         full_dir = tmpd+"/"+os.listdir(tmpd)[0]+"/build"
         os.chdir( full_dir )
         builder = str_to_class(dep.build_sys)()
         if not builder.install(dep):
-            register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
-            register_cleanup_routine( lambda : shutil.rmtree(get_temp_dir()+"/"+dep.name) )
             err.log("Install stage for "+dep.name+" failed!")
         os.chdir( old_cwd )
         filenames = list()
@@ -69,8 +66,6 @@ class source_builder:
         except:
             pass
 
-        installed_dep = installed_dependency( dep, True, prefix, filenames )
-
         ### check whether currently installed
         if self.check_install(filenames):
             err.log("Dependency "+dep.name+" is already installed at location "+prefix)
@@ -82,5 +77,4 @@ class source_builder:
                 pass
             ### install to the prefix
             shutil.move( old_filenames[i], filenames[i] )
-            register_cleanup_routine( lambda : shutil.rmtree(tmpd+".tmp") )
-        return installed_dep 
+        return installed_dependency( dep, True, prefix, filenames ) 
