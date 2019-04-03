@@ -2,8 +2,9 @@
 
 import sys, os, subprocess, platform, distro, pickle
 import urllib.request, shutil, argparse, json, re
+import cleanup
 from logger import err, warn, log
-from util import strip, str_to_class, get_os, get_temp_dir, get_install_dir, get_file_dir, get_package_manager_name
+from util import strip, str_to_class, get_os, get_temp_dir, get_install_dir, get_file_dir, get_package_manager_name, is_owner_for_dir
 from dependency import dependency, installed_dependency, version
 from package_manager import package_manager, import_package_managers
 from build_system import build_system, import_build_systems
@@ -13,14 +14,14 @@ class dependency_handler:
     comment_re = re.compile("#")
     tag_re     = re.compile("\[.*\]")
     
-    dependencies  = list()
-    tagged_deps   = dict()
-    deps_dict     = dict()
-    temp_dir      = get_temp_dir()
-    prefix        = ""
-    deps_filename = "eosio.deps"
-    installed_deps = list()
-
+    dependencies      = list()
+    tagged_deps       = dict()
+    deps_dict         = dict()
+    temp_dir          = get_temp_dir()
+    prefix            = ""
+    deps_filename     = "eosio.deps"
+    installed_deps    = list()
+    
     def download_dependency_and_unpack( self, dep, use_bin ):
         log.log("Downloading "+dep.name)
         url = ""
@@ -52,31 +53,29 @@ class dependency_handler:
                         ### fallback
                         self.download_dependency_and_unpack( dep, len(dep.bin_url) > 0 )
                         sb = source_builder()
-                        cleanup_build   = sb.build( dep )
-                        cleanup_install = sb.install( dep, self.prefix )
-                        cleanup_build()
-                        self.installed_deps.append(cleanup_install())
+                        sb.build( dep )
+                        self.installed_deps.append(sb.install( dep, self.prefix ))
             elif res == package_manager.not_satisfiable:
                 warn.log( "Dependency ("+dep.name+" : "+dep.version.to_string()+") not satisfiable, doing a source install!" )
                 self.download_dependency_and_unpack( dep, len(dep.bin_url) > 0 )
                 sb = source_builder()
-                cleanup_build   = sb.build( dep )
-                cleanup_install = sb.install( dep, self.prefix )
-                cleanup_build()
-                self.installed_deps.append(cleanup_install())
-
+                sb.build( dep )
+                self.installed_deps.append(sb.install( dep, self.prefix ))
             else:
                 err.log("Dependency ("+dep.name+") installed but version is too low ("+packman.get_version(dep).to_string()+")")
 
     def write_installed_deps_file( self ):
         deps_file = open("__deps", "wb")
-        pickle.dump( self.installed_deps, deps_file )
+        for i in self.installed_deps:
+            print(i.dep.name)
+        print(pickle.dumps( self.installed_deps)) #, deps_file ))
     
     def read_installed_deps_file( self ):
         deps_file = open("__deps", "rb")
         ids = pickle.load(deps_file)
         for i in ids:
             print(i)
+
     def read_dependency_file( self, dep_fname ):
         dep_file = open( dep_fname, "r" )
         mode = 0
@@ -102,12 +101,15 @@ class dependency_handler:
 
                     mode = 2
                 continue
+
             ### [dependencies]
             if mode == 1:
                 dep_name = strip(line.split(":")[0])
                 ds = strip(line.split(":")[1])[1:-1].split(",")
-                vers = version(int(strip(ds[0]).split(".")[0]), int(strip(ds[0]).split(".")[1]))
+                is_strict = ds[0].startswith(">=")
+                vers = version(int(strip(ds[0].replace(">=", "")).split(".")[0]), int(strip(ds[0].replace(">=", "")).split(".")[1]))
                 dep = dependency( dep_name, vers, strip(ds[1]) )
+                dep.strict = is_strict
                 self.dependencies.append( dep )
                 self.deps_dict[dep.name] = dep
             
@@ -166,11 +168,10 @@ class dependency_handler:
                         else:
                             continue
 
-
     def __init__(self, pfx):
         import_package_managers()
         self.prefix = os.path.abspath(os.path.realpath(os.path.expanduser(pfx)))
-        if os.stat(self.prefix).st_uid != os.getuid():
+        if not is_owner_for_dir(self.prefix):
             err.log("Prefix for installation <"+self.prefix+"> needs root access, use sudo")
         
 if __name__ == "__main__":
@@ -181,9 +182,12 @@ if __name__ == "__main__":
     handler.check_dependencies()
     handler.write_installed_deps_file()
     handler.read_installed_deps_file()
-
-#    try:
-#        handler = dependency_handler()
-#        handler.check_dependencies()
-#    except:
-#        err.log("Critical failure")
+    exit(0)
+    try:
+        handler = dependency_handler( args.prefix )
+        handler.check_dependencies()
+        handler.write_installed_deps_file()
+        handler.read_installed_deps_file()
+    except Exception as ex:
+        warn.log(str(ex))
+        err.log("Critical failure")

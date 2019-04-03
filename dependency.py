@@ -14,9 +14,10 @@ def deserialize( js ):
     return JSONDecoder(object_hook = from_json).decode(js)
 
 class dependency:
-    def __init__(self, nm, vs, pn, bs, su, bu, pbc, bc, ic):
+    def __init__(self, nm, vs, st, pn, bs, su, bu, pbc, bc, ic):
         self.name         = nm
         self.version      = vs
+        self.strict       = st
         self.build_sys    = bs
         self.source_url   = su
         self.package_name = pn
@@ -32,6 +33,7 @@ class dependency:
 
     name             = ""
     package_name     = ""
+    strict           = False
     version          = ""
     build_sys        = ""
     source_url       = ""

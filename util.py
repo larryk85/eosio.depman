@@ -24,6 +24,26 @@ def str_to_class(cn):
         except AttributeError:
             continue
 
+def is_owner_for_dir(path):
+    head, tail = os.path.split(path)
+    try:
+        if os.stat(head).st_uid == os.getuid():
+            return True
+    except FileNotFoundError:
+        path = head
+        pass
+
+    for sp in os.path.split(path):
+        try:
+            if os.stat(sp[0]).st_uid == os.getuid():
+                return True
+        except FileNotFoundError:
+            path = sp[0]
+            print(path)
+            continue
+
+    return False
+
 def get_os():
     if platform.system() == "Darwin":
         return ["Darwin", "OSX", platform.mac_ver()[0]]

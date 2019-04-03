@@ -1,7 +1,8 @@
 ### version, optional build system type
 [dependencies]
-cmake : [3.20, autoconf]
-llvm4 : [4.0, cmake]
+cmake : [3.12, autoconf]
+#llvm4 : [14.0, cmake]
+llvm4 : [14.0, cmake_ninja]
 
 ### urls for dependency sources
 # 2 pre defined identifiers `source` and `bin` these are used for either source locations or pre-built
@@ -13,15 +14,13 @@ llvm4 : [source:all : https://github.com/llvm/llvm-project/archive/llvmorg-4.0.1
 llvm4 : [bin:Ubuntu : https://releases.llvm.org/4.0.1/clang+llvm-4.0.1-x86_64-linux-gnu-debian8.tar.xz]
 
 ### listing for package names
-# pre-defined identifier `all` used to specify that all targets use the same package name
-# currently support `brew`, `apt-get` and `yum`
 [packages]
 cmake : [all:cmake]
-llvm4 : [Ubuntu:llvm-4.0, Darwin:llvm@4]
+llvm4 : [Ubuntu:llvm-4.0, OSX:llvm@4]
 
 ### build commands, install commands
 [commands]
-llvm4 : [pre_build:Ubuntu:"../llvm"]
+llvm4 : [pre_build:all:"../llvm"]
 
 [system]
 cmake

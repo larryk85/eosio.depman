@@ -1,3 +1,4 @@
+import cleanup
 class logger:
     red = "91;1"
     green = "92"
@@ -12,6 +13,7 @@ class logger:
     def log(self, s):
         print("\33["+self.color+"m"+s+"\33[0m")
         if self.should_exit:
+            cleanup.cleanup_routine()
             exit(-1)
 
 log  = logger(logger.green, False)

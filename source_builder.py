@@ -1,5 +1,6 @@
 import os, shutil, json, pickle
 from logger import err, warn, log
+from cleanup import register_cleanup_routine
 from util import str_to_class, get_temp_dir
 from dependency import dependency, installed_dependency, version, serialize
 from build_system import build_system, noop_build_system, import_build_systems
@@ -7,6 +8,14 @@ from build_system import build_system, noop_build_system, import_build_systems
 class source_builder:
     def __init__(self):
         import_build_systems()
+    
+    def check_install(self, installed_files):
+        for f in installed_files:
+            print(f)
+            if os.path.isfile(f):
+                return True
+        return False
+        
     def build(self, dep):
         old_cwd = os.getcwd()
         tmpd = get_temp_dir()+"/"+dep.name
@@ -24,14 +33,13 @@ class source_builder:
             builder = str_to_class(dep.build_sys)()
         
         if not builder.pre_build(dep):
-            shutil.rmtree(tmpd)
+            register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
             err.log("Pre-build stage for "+dep.name+" failed!")
         if not builder.build(dep):
-            shutil.rmtree(tmpd)
+            register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
             err.log("Build stage for "+dep.name+" failed!")
 
         os.chdir( old_cwd )
-        return lambda : shutil.rmtree(tmpd)
     
     def install(self, dep, prefix):
         tmpd = get_temp_dir()+"/"+dep.name
@@ -41,8 +49,8 @@ class source_builder:
         os.chdir( full_dir )
         builder = str_to_class(dep.build_sys)()
         if not builder.install(dep):
-            shutil.rmtree(tmpd)
-            shutil.rmtree(get_temp_dir()+"/"+dep.name)
+            register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
+            register_cleanup_routine( lambda : shutil.rmtree(get_temp_dir()+"/"+dep.name) )
             err.log("Install stage for "+dep.name+" failed!")
         os.chdir( old_cwd )
         filenames = list()
@@ -62,6 +70,11 @@ class source_builder:
             pass
 
         installed_dep = installed_dependency( dep, True, prefix, filenames )
+
+        ### check whether currently installed
+        if self.check_install(filenames):
+            err.log("Dependency "+dep.name+" is already installed at location "+prefix)
+
         for i in range(0, len(filenames)):
             try:
                 os.makedirs( os.path.dirname( filenames[i] ) )
@@ -69,4 +82,5 @@ class source_builder:
                 pass
             ### install to the prefix
             shutil.move( old_filenames[i], filenames[i] )
-        return lambda : shutil.rmtree(tmpd+".tmp"); installed_dep
+            register_cleanup_routine( lambda : shutil.rmtree(tmpd+".tmp") )
+        return installed_dep 
