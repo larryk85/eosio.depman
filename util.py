@@ -10,7 +10,7 @@ def execute_cmd_dump_output( cmd ):
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     with proc.stdout:
         for line in iter( proc.stdout.readline, b'' ):
-            print(line)
+            print(str(line))
     proc.wait()
     return proc.returncode == 0
 

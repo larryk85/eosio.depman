@@ -1,4 +1,6 @@
+import os
 from json import JSONEncoder, JSONDecoder, dumps
+from util import execute_cmd_dump_output
 
 class dependency_encoder(JSONEncoder):
     def default(self, o):
@@ -14,13 +16,14 @@ def deserialize( js ):
     return JSONDecoder(object_hook = from_json).decode(js)
 
 class dependency:
-    def __init__(self, nm, vs, st, pn, bs, su, bu, pbc, bc, ic):
+    def __init__(self, nm, vs, st, pn, en, bs, su, bu, pbc, bc, ic):
         self.name         = nm
         self.version      = vs
         self.strict       = st
         self.build_sys    = bs
         self.source_url   = su
         self.package_name = pn
+        self.exe_name     = en
         self.bin_url      = bu
         self.pre_build_cmds = pbc
         self.build_cmds   = bc
@@ -31,8 +34,9 @@ class dependency:
         self.version      = vs
         self.build_sys    = bs
 
-    name             = ""
-    package_name     = ""
+    name             = "***"
+    package_name     = "***"
+    exe_name         = "***"
     strict           = False
     version          = ""
     build_sys        = ""
@@ -48,6 +52,13 @@ class installed_dependency:
         self.provided = prov
         self.path     = p
         self.files    = fs
+    
+    def execute(self, *cmds):
+        cmd_str = ""
+        for cmd in cmds:
+            cmd_str += " "+cmd
+        eo, ee, ec = execute_cmd_dump_output(os.join(path, dep.name), cmd_str)
+        return ec == 0
 
     dep      = None
     provided = False

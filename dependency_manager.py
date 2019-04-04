@@ -53,8 +53,8 @@ class dependency_handler:
                         ### fallback
                         self.download_dependency_and_unpack( dep, len(dep.bin_url) > 0 )
                         sb = source_builder()
-                        sb.build( dep )
-                        installed = sb.install( dep, self.prefix )
+                        sb.build( self.installed_deps, dep )
+                        installed = sb.install( self.installed_deps, dep, self.prefix )
                         self.installed_deps[dep.name] = installed
             elif res == package_manager.not_satisfiable:
                 warn.log( "Dependency ("+dep.name+" : "+dep.version.to_string()+") not satisfiable, doing a source install!" )
@@ -171,19 +171,42 @@ class dependency_handler:
                         else:
                             continue
 
-    def __init__(self, pfx):
-        import_package_managers()
+    def get_prefix(self, dep_name):
+        if dep_name in self.installed_deps:
+            return self.installed_deps[dep_name].path
+        else:
+            err.log("Dependency ("+dep_name+") not available")
+
+    def check_if_uid_satisfied(self, pfx):
         self.prefix = os.path.abspath(os.path.realpath(os.path.expanduser(pfx)))
         if not is_owner_for_dir(self.prefix):
             err.log("Prefix for installation <"+self.prefix+"> needs root access, use sudo")
+
+    def __init__(self, pfx):
+        import_package_managers()
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manager for dependencies")
     parser.add_argument('--prefix', type=str, dest='prefix', default="/usr/local")
+    parser.add_argument('--query', type=str, dest='query', default="")
+    parser.add_argument('--path', type=str, dest='path', default="")
     args = parser.parse_args()
+    handler = dependency_handler( args.prefix )
+    handler.read_installed_deps_file()
+    if args.query:
+        log.log("Prefix for "+args.query+" : "+handler.get_prefix(args.query))
+        exit(0)
+    handler.check_if_uid_satisfied( args.prefix )
+    handler.check_dependencies()
+    handler.write_installed_deps_file()
+    exit(0)
     try:
         handler = dependency_handler( args.prefix )
         handler.read_installed_deps_file()
+        if args.query:
+            log.log("Prefix for "+args.query+" : "+handler.get_prefix(args.query))
+            exit(0)
+        handler.check_if_uid_satisfied( args.prefix )
         handler.check_dependencies()
         handler.write_installed_deps_file()
     except Exception as ex:

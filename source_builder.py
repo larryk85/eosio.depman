@@ -15,7 +15,7 @@ class source_builder:
                 return True
         return False
         
-    def build(self, dep):
+    def build(self, installed, dep):
         old_cwd = os.getcwd()
         tmpd = get_temp_dir()+"/"+dep.name
         register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
@@ -32,14 +32,14 @@ class source_builder:
         else:
             builder = str_to_class(dep.build_sys)()
         
-        if not builder.pre_build(dep):
+        if not builder.pre_build(installed, dep):
             err.log("Pre-build stage for "+dep.name+" failed!")
-        if not builder.build(dep):
+        if not builder.build(installed, dep):
             err.log("Build stage for "+dep.name+" failed!")
 
         os.chdir( old_cwd )
     
-    def install(self, dep, prefix):
+    def install(self, installed, dep, prefix):
         old_cwd = os.getcwd()
         tmpd = get_temp_dir()+"/"+dep.name
         register_cleanup_routine( lambda : shutil.rmtree(tmpd) )
@@ -47,7 +47,7 @@ class source_builder:
         full_dir = tmpd+"/"+os.listdir(tmpd)[0]+"/build"
         os.chdir( full_dir )
         builder = str_to_class(dep.build_sys)()
-        if not builder.install(dep):
+        if not builder.install(installed, dep):
             err.log("Install stage for "+dep.name+" failed!")
         os.chdir( old_cwd )
         filenames = list()

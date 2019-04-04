@@ -5,14 +5,14 @@ from build_system import build_system
 
 ### concrete implementation for autoconf
 class cmake(build_system):
-    def pre_build(self, dep):
+    def pre_build(self, installed, dep):
         log.log("cmake : pre-build step for "+dep.name)
-        return execute_cmd_dump_output("cmake .. -DCMAKE_INSTALL_PREFIX="+get_temp_dir()+"/"+dep.name+".tmp "+dep.pre_build_cmds)
+        return installed["cmake"].execute("..", "-DCMAKE_INSTALL_PREFIX="+get_temp_dir()+"/"+dep.name+".tmp", dep.pre_build_cmds)
 
-    def build(self, dep):
+    def build(self, installed, dep):
         log.log("cmake : build step for "+dep.name)
-        return execute_cmd_dump_output("make -j "+dep.build_cmds)
+        return installed["make"].execute("-j ", dep.build_cmds)
 
-    def install(self, dep):
+    def install(self, installed, dep):
         log.log("cmake : install step for "+dep.name)
-        return execute_cmd_dump_output("make install "+dep.install_cmds)
+        return installed["make"].execute("install", dep.install_cmds)
