@@ -1,6 +1,6 @@
-import os
+import os, re
 from json import JSONEncoder, JSONDecoder, dumps
-from util import execute_cmd_dump_output
+from util import execute_cmd_dump_output, execute_cmd
 
 class dependency_encoder(JSONEncoder):
     def default(self, o):
@@ -29,16 +29,34 @@ class dependency:
         self.build_cmds   = bc
         self.install_cmds = ic
 
-    def __init__(self, nm, vs, bs):
+    def __init__(self, nm, vs, t, bs):
         self.name         = nm
         self.version      = vs
+        self.type         = t
         self.build_sys    = bs
+
+    def is_library(self):
+        return self.type == "lib"
+    
+    def is_executable(self):
+        return self.type == "exe"
+    
+    def find_executable(self):
+        eo, ee, ec = execute_cmd("which "+self.name)
+        if eo and ec == 0:
+            neo, ee, ec = execute_cmd(self.name+" --version")
+            vers_str = re.findall("\d+.\d+", neo)[0]
+            dep = dependency(self.name, version(vers_str.split(".")[0], vers_str.split(".")[1]), "exe", "none")
+            installed_dep = installed_dependency( dep, False, os.path.dirname(eo), list() )
+            return installed_dep
+        return None
 
     name             = "***"
     package_name     = "***"
     exe_name         = "***"
     strict           = False
     version          = ""
+    type             = ""
     build_sys        = ""
     source_url       = ""
     bin_url          = ""
@@ -57,8 +75,7 @@ class installed_dependency:
         cmd_str = ""
         for cmd in cmds:
             cmd_str += " "+cmd
-        eo, ee, ec = execute_cmd_dump_output(os.join(path, dep.name), cmd_str)
-        return ec == 0
+        return execute_cmd_dump_output(os.path.join(self.path, self.dep.name)+cmd_str)
 
     dep      = None
     provided = False
@@ -76,12 +93,18 @@ class version:
         self.minor = int(minor)
 
     def ge(self, v):
+        if self.major == -1 and self.minor == -1:
+            return True
         return self.major >= v.major and self.minor >= v.minor
 
     def eq(self, v):
+        if self.major == -1 and self.minor == -1:
+            return True
         return self.major == v.major and self.minor == v.minor
 
     def to_string(self):
+        if self.major == -1 and self.minor == -1:
+            return "any"
         return str(self.major)+"."+str(self.minor)
 
     major = 0

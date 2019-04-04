@@ -8,7 +8,6 @@ def register_cleanup_routine( cr ):
 def cleanup():
     global cleanup_routines
     try:
-        print(len(cleanup_routines))
         for f in cleanup_routines:
            f() 
     except:

@@ -1,5 +1,5 @@
 import sys, os, subprocess, distro, platform, tempfile
-from logger import err, warn, log
+from logger import err, warn, log, verbose_log
 
 def execute_cmd( cmd ):
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -10,7 +10,7 @@ def execute_cmd_dump_output( cmd ):
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     with proc.stdout:
         for line in iter( proc.stdout.readline, b'' ):
-            print(str(line))
+            verbose_log.log(str(line))
     proc.wait()
     return proc.returncode == 0
 
@@ -23,6 +23,9 @@ def str_to_class(cn):
             return getattr(sys.modules[mod], cn)
         except AttributeError:
             continue
+
+def get_home_dir():
+    return expanduser("~")
 
 def is_owner_for_dir(path):
     head, tail = os.path.split(path)
@@ -39,7 +42,7 @@ def is_owner_for_dir(path):
                 return True
         except FileNotFoundError:
             path = sp[0]
-            print(path)
+            err.log(path)
             continue
 
     return False

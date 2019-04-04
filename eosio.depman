@@ -1,0 +1,5 @@
+#! /usr/bin/env bash
+
+export PYTHONDONTWRITEBYTECODE=1
+echo `pwd`
+python3 $(dirname $0)/dependency_manager.py $@

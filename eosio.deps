@@ -1,7 +1,8 @@
 ### version, optional build system type
 [dependencies]
-cmake : [3.20, autoconf]
-llvm4 : [14.0, cmake]
+make  : [any,  exe, none]
+cmake : [3.20, exe, autoconf]
+llvm4 : [14.0, lib, cmake]
 #llvm4 : [14.0, cmake_ninja]
 
 ### urls for dependency sources
