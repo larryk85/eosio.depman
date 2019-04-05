@@ -1,4 +1,4 @@
-import sys, os, subprocess, distro, platform, tempfile
+import sys, os, subprocess, distro, platform, tempfile, pwd, grp
 from logger import err, warn, log, verbose_log
 
 def execute_cmd( cmd ):
@@ -25,7 +25,7 @@ def str_to_class(cn):
             continue
 
 def get_home_dir():
-    return expanduser("~")
+    return os.path.expanduser("~")
 
 def is_owner_for_dir(path):
     head, tail = os.path.split(path)
@@ -75,6 +75,13 @@ def get_file_dir():
         return "/usr/local/etc"
     else:
         err.log("Windows is currently not supported")
+
+### get the uid of the parent even in sudo
+def get_original_uid():
+    if 'SUDO_USER' in os.environ:
+        return [pwd.getpwnam(os.environ['SUDO_USER']).pw_uid, grp.getgrnam(os.environ['SUDO_USER']).gr_gid]
+    else:
+        return [pwd.getpwnam(os.environ['USER']).pw_uid, grp.getgrnam(os.environ['USER']).gr_gid]
 
 def get_package_manager_name():
     if is_linux():

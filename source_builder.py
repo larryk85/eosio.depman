@@ -1,7 +1,7 @@
 import os, shutil, json, pickle
 from logger import err, warn, log
 from cleanup import register_cleanup_routine
-from util import str_to_class, get_temp_dir
+from util import str_to_class, get_temp_dir, get_home_dir, get_original_uid
 from dependency import dependency, installed_dependency, version, serialize
 from build_system import build_system, noop_build_system, import_build_systems
 
@@ -76,5 +76,13 @@ class source_builder:
             except:
                 pass
             ### install to the prefix
+
             shutil.move( old_filenames[i], filenames[i] )
+        ### chown back to user if prefix is home rooted
+        if os.path.commonprefix([get_home_dir(), filenames[i]]):
+            for root, dirs, files in os.walk(prefix):
+                for d in dirs:
+                    os.chown(os.path.join(root, d), get_original_uid()[0], get_original_uid()[1])
+                for f in files:
+                    os.chown(os.path.join(root, f), get_original_uid()[0], get_original_uid()[1])
         return installed_dependency( dep, True, prefix, filenames ) 

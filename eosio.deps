@@ -1,8 +1,8 @@
 ### version, optional build system type
 [dependencies]
-make  : [any,  exe, none]
-cmake : [3.20, exe, autoconf]
-llvm4 : [14.0, lib, cmake]
+make  : [4.0,  exe, none]
+cmake : [3.4, exe, autoconf]
+#llvm4 : [14.0, lib, cmake]
 #llvm4 : [14.0, cmake_ninja]
 
 ### urls for dependency sources
@@ -11,7 +11,7 @@ llvm4 : [14.0, lib, cmake]
 [urls]
 cmake : [source:all : https://github.com/Kitware/CMake/releases/download/v3.13.4/cmake-3.13.4.tar.gz]
 #cmake : [bin:Ubuntu<16.04> : https://
-llvm4 : [source:all : https://github.com/llvm/llvm-project/archive/llvmorg-4.0.1.zip]
+#llvm4 : [source:all : https://github.com/llvm/llvm-project/archive/llvmorg-4.0.1.zip]
 #llvm4 : [bin:Ubuntu : https://releases.llvm.org/4.0.1/clang+llvm-4.0.1-x86_64-linux-gnu-debian8.tar.xz]
 
 ### listing for package names
@@ -25,3 +25,4 @@ cmake : [all:cmake]
 
 [system]
 cmake
+make

@@ -16,9 +16,13 @@ class package_manager:
 
     def get_version(self, dep):
         pass
+    def prefix(self, dep):
+        pass
     def check_dependency(self, dep):
         pass
     def install_dependency(self, dep):
+        pass
+    def remove_dependency(self, dep):
         pass
 
 def import_package_managers():

@@ -3,7 +3,7 @@
 import sys, os, subprocess, platform, distro, pickle
 import urllib.request, shutil, argparse, json, re
 from logger import err, warn, log, verbose_log
-from util import strip, str_to_class, get_os, get_temp_dir, get_install_dir, get_file_dir, get_home_dir, get_package_manager_name, is_owner_for_dir
+from util import strip, str_to_class, get_os, get_temp_dir, get_install_dir, get_file_dir, get_home_dir, get_package_manager_name, is_owner_for_dir, get_original_uid
 from dependency import dependency, installed_dependency, version
 from package_manager import package_manager, import_package_managers
 from build_system import build_system, import_build_systems
@@ -20,7 +20,10 @@ class dependency_handler:
     deps_filename     = "eosio.deps"
     installed_deps    = dict()
     check_only        = False
-    
+    deps_to_install   = ""
+    local_deps = dict()
+    system_deps = dict()
+
     def download_dependency_and_unpack( self, dep, use_bin ):
         log.log("Downloading "+dep.name)
         url = ""
@@ -50,6 +53,8 @@ class dependency_handler:
                     sb.build( self.installed_deps, dep )
                     installed = sb.install( self.installed_deps, dep, self.prefix )
                     self.installed_deps[dep.name] = installed
+            else:
+                self.installed_deps[dep.name] = installed_dependency(dep, True, packman.prefix(dep), "") 
             return False
         elif res == package_manager.not_satisfiable:
             if (not self.check_only):
@@ -66,41 +71,71 @@ class dependency_handler:
             err.log("Dependency ("+dep.name+") installed but version is too low ("+packman.get_version(dep).to_string()+")")
             return False
 
-    def check_dependencies( self ):
-        self.read_dependency_file( self.deps_filename )
-        dep_check = True
-        for dep in self.dependencies:
-            log.log("Checking dep "+dep.name)
-            if dep.name in self.installed_deps:
-                log.log("Dependency ("+dep.name+") found!")
-                continue
-            if dep.is_executable():
-                installed_dep = dep.find_executable()
-                if installed_dep:
+    def check_dependencies_helper( self, dep ):
+        dep_check = True 
+        log.log("Checking dep "+dep.name)
+        if dep.name in self.installed_deps and self.installed_deps[dep.name].provided == True:
+            log.log("Dependency ("+dep.name+") found!")
+            return dep_check
+        if dep.is_executable():
+            installed_dep = dep.find_executable()
+            if installed_dep:
+                if installed_dep.dep.version.ge(dep.version):
+                    log.log("Dependency ("+dep.name+") found!")
                     self.installed_deps[dep.name] = dep.find_executable()
                 else:
                     dep_check = dep_check and self.check_dependency( dep )
             else:
                 dep_check = dep_check and self.check_dependency( dep )
+        else:
+            dep_check = dep_check and self.check_dependency( dep )
+        return dep_check
+
+    def check_dependencies( self ):
+        self.read_dependency_file( self.deps_filename )
+        dep_check = True
+        if self.deps_to_install:
+            for dep in self.tagged_deps[self.deps_to_install]:
+                dep_check = self.check_dependencies_helper( self.deps_dict[dep] )
+        else:
+            for dep in self.dependencies:
+                dep_check = self.check_dependencies_helper( dep )
         return dep_check
 
     def write_installed_deps_file( self ):
-        local_deps = dict()
-        system_deps = dict()
-        for k, v in installed_deps.items():
-            if os.path.commonprefix(get_home_dir(), v.path) == get_home_dir():
-                warn.log("Can install to "+get_home_dir())
-        deps_file = open("__deps", "wb")
+        deps_file = open(os.path.join(get_home_dir(), ".eosio.install.deps"), "wb")
         pickle.dump( self.installed_deps, deps_file )
         deps_file.close()
-    
+        os.chown(os.path.join(get_home_dir(), ".eosio.install.deps"), get_original_uid()[0], get_original_uid()[1])
+
+        deps_file = open(os.path.join(get_file_dir(), ".eosio.install.deps"), "wb")
+        pickle.dump( self.installed_deps, deps_file )
+        deps_file.close()
+   
     def read_installed_deps_file( self ):
         try:
-            deps_file = open("__deps", "rb")
-            self.installed_deps = pickle.load(deps_file)
+            deps_file = open(os.path.join(get_home_dir(), ".eosio.install.deps"), "rb")
+            self.local_deps = pickle.load(deps_file)
             deps_file.close()
-        except:
+            self.installed_deps = self.local_deps.copy()
+
+            deps_file = open(os.path.join(get_file_dir(), ".eosio.install.deps"), "rb")
+            self.system_deps = pickle.load(deps_file)
+            deps_file.close()
+            self.installed_deps.update(self.system_deps)
+
+        except Exception as Ex:
             pass
+    
+    def remove_dependency(self, dep_name):
+        packman = str_to_class(get_package_manager_name())()
+        dep = self.installed_deps[dep_name].dep
+        if self.installed_deps[dep_name].files:
+            for f in self.installed_deps[dep_name].files:
+                shutil.remove(f)
+        elif self.installed_deps[dep_name].provided:
+            packman.remove_dependency(dep)
+        self.installed_deps.pop(dep.name, None)
 
     def read_dependency_file( self, dep_fname ):
         dep_file = open( dep_fname, "r" )
@@ -208,8 +243,9 @@ class dependency_handler:
         if not is_owner_for_dir(self.prefix):
             err.log("Prefix for installation <"+self.prefix+"> needs root access, use sudo")
 
-    def __init__(self, pfx):
+    def __init__(self, pfx, install):
         import_package_managers()
+        self.deps_to_install = install
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manager for dependencies")
@@ -218,10 +254,14 @@ if __name__ == "__main__":
     parser.add_argument('--query', type=str, dest='query', default="")
     parser.add_argument('--path', type=str, dest='path', default="")
     parser.add_argument('--check', dest='check', action='store_true', default=False)
+    parser.add_argument('--install', type=str, dest='install', default="")
+    parser.add_argument('--remove', type=str, dest='remove', default="")
+    parser.add_argument('--remove-all', dest='remove_all', action="store_true", default=False)
+    parser.add_argument('--install-dir', type=str, dest='install_dir', default="")
     parser.add_argument('file', type=str, nargs='?')
 
     args = parser.parse_args()
-    handler = dependency_handler( args.prefix )
+    handler = dependency_handler( args.prefix, args.install )
     handler.read_installed_deps_file()
     if args.verbose:
         verbose_log.silence = False
@@ -235,12 +275,25 @@ if __name__ == "__main__":
     if args.query:
         log.log("Prefix for "+args.query+" : "+handler.get_prefix(args.query))
         exit(0)
+    if args.install_dir:
+        log.log(handler.get_prefix(args.install_dir))
+        exit(0)
+    if args.remove:
+        handler.remove_dependency(args.remove)
+        handler.write_installed_deps_file()
+        exit(0)
+    if args.remove_all:
+        for k in handler.installed_deps.copy():
+            handler.remove_dependency(k)
+        handler.write_installed_deps_file()
+        exit(0)
+
     handler.check_if_uid_satisfied( args.prefix )
     handler.check_dependencies()
     handler.write_installed_deps_file()
     exit(0)
     try:
-        handler = dependency_handler( args.prefix )
+        handler = dependency_handler( args.prefix, args.install )
         handler.read_installed_deps_file()
         if args.query:
             log.log("Prefix for "+args.query+" : "+handler.get_prefix(args.query))

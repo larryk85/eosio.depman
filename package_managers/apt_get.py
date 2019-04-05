@@ -17,6 +17,12 @@ class apt_get(package_manager):
             return version(int(self.strip_suff(vers_str.split(".")[0])), int(self.strip_suff(vers_str.split(".")[1])))
         return None
 
+    def prefix(self, dep):
+        eo, ee, ec = execute_cmd("dpkg -L "+dep.package_name)
+        if eo and ec == 0:
+            return os.path.commonpath(eo.split())
+        return None
+
     def check_dependency(self, dep):
         eo, ee, ec = execute_cmd("apt-cache policy "+dep.package_name)
         vers = self.get_version(dep)
@@ -38,4 +44,11 @@ class apt_get(package_manager):
         if (os.getuid() != 0):
             err.log("Installing via apt-get requires sudo!")
         eo, ee, ec = execute_cmd( "apt-get --yes install "+dep.package_name )
+        return ec == 0
+
+    def remove_dependency(self, dep):
+        log.log("Removing "+dep.name+" "+dep.package_name)
+        if (os.getuid() != 0):
+            err.log("Removing via apt-get requires sudo!")
+        eo, ee, ec = execute_cmd( "apt-get --yes remove "+dep.package_name )
         return ec == 0

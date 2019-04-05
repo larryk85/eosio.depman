@@ -29,6 +29,7 @@ class brew(package_manager):
                 if vers.ge(dep.version):
                     return self.not_installed
         return self.not_satisfiable
+
     def install_dependency(self, dep):
         log.log("Installing "+dep.name+" "+dep.package_name)
         eo, ee, ec = execute_cmd("brew install "+dep.package_name)
