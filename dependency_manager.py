@@ -273,10 +273,10 @@ if __name__ == "__main__":
             exit(-1)
         exit(0)
     if args.query:
-        log.log("Prefix for "+args.query+" : "+handler.get_prefix(args.query))
+        log.log("Prefix for "+args.query+" : "+handler.get_prefix(strip(args.query)))
         exit(0)
     if args.install_dir:
-        log.log(handler.get_prefix(args.install_dir))
+        log.log(handler.get_prefix(strip(args.install_dir)))
         exit(0)
     if args.remove:
         handler.remove_dependency(args.remove)

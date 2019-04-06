@@ -30,7 +30,7 @@ def get_home_dir():
 def is_owner_for_dir(path):
     head, tail = os.path.split(path)
     try:
-        if os.stat(head).st_uid == os.getuid():
+        if os.stat(head).st_uid == os.geteuid():
             return True
     except FileNotFoundError:
         path = head
@@ -38,7 +38,7 @@ def is_owner_for_dir(path):
 
     for sp in os.path.split(path):
         try:
-            if os.stat(sp[0]).st_uid == os.getuid():
+            if os.stat(sp[0]).st_uid == os.geteuid():
                 return True
         except FileNotFoundError:
             path = sp[0]
@@ -78,10 +78,7 @@ def get_file_dir():
 
 ### get the uid of the parent even in sudo
 def get_original_uid():
-    if 'SUDO_USER' in os.environ:
-        return [pwd.getpwnam(os.environ['SUDO_USER']).pw_uid, grp.getgrnam(os.environ['SUDO_USER']).gr_gid]
-    else:
-        return [pwd.getpwnam(os.environ['USER']).pw_uid, grp.getgrnam(os.environ['USER']).gr_gid]
+    return [os.getuid(), os.getgid()]
 
 def get_package_manager_name():
     if is_linux():

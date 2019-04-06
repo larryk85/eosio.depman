@@ -1,7 +1,15 @@
 ### version, optional build system type
 [dependencies]
-make  : [any,  exe, none]
-cmake : [3.4, exe, autoconf]
+make     : [any,  exe, none]
+gettext  : [0.19, lib, autoconf]
+libtool  : [any,  exe, autoconf_bootstrap] 
+automake : [any,  exe, autoconf_bootstrap]
+cmake    : [3.4,  exe, autoconf]
+GMP      : [1.19, lib, autoconf]
+llvm4    : [4.0,  lib, cmake]
+python2  : [2.7,  exe, autoconf]
+doxygen  : [1.8,  exe, cmake]
+clang8   : [8.0,  exe, cmake]
 #llvm4 : [14.0, lib, cmake]
 #llvm4 : [14.0, cmake_ninja]
 
