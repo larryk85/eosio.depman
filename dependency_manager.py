@@ -8,6 +8,7 @@ from dependency import dependency, installed_dependency, version
 from package_manager import package_manager, import_package_managers
 from build_system import build_system, import_build_systems
 from source_builder import source_builder
+import parser
 
 class dependency_handler:
     comment_re = re.compile("#")
@@ -17,9 +18,9 @@ class dependency_handler:
     deps_dict         = dict()
     temp_dir          = get_temp_dir()
     prefix            = ""
-    deps_filename     = "eosio.deps"
     installed_deps    = dict()
     check_only        = False
+    source_only       = False
     deps_to_install   = ""
     local_deps = dict()
     system_deps = dict()
@@ -37,6 +38,9 @@ class dependency_handler:
 
         log.log("Unpacked "+base_name)
         os.remove( self.temp_dir+"/"+base_name )
+    
+    def set_source_only( self, is_source_only ):
+        self.source_only = is_source_only
 
     def check_dependency( self, dep ):
         packman = str_to_class(get_package_manager_name())()
@@ -46,7 +50,7 @@ class dependency_handler:
             return True
         elif res == package_manager.not_installed:
             warn.log( "Dependency ("+dep.name+" : "+dep.version.to_string()+") not found!" )
-            if (not packman.install_dependency( dep ) and not self.check_only):
+            if (self.source_only or not packman.install_dependency( dep ) and not self.check_only):
                     ### fallback
                     self.download_dependency_and_unpack( dep, len(dep.bin_url) > 0 )
                     sb = source_builder()
@@ -64,6 +68,7 @@ class dependency_handler:
                 sb.build( self.installed_deps, dep )
                 installed = sb.install( self.installed_deps, dep, self.prefix )
                 self.installed_deps[dep.name] = installed
+                return True
             else:
                 warn.log( "Dependency ("+dep.name+" : "+dep.version.to_string()+") not satisfiable!" )
             return False
@@ -75,12 +80,16 @@ class dependency_handler:
         dep_check = True 
         log.log("Checking dep "+dep.name)
         if dep.name in self.installed_deps and self.installed_deps[dep.name].provided == True:
-            log.log("Dependency ("+dep.name+") found!")
-            return dep_check
+            if self.installed_deps[dep.name].dep.version.eq(self.deps_dict[dep.name].version):
+                log.log("Dependency ("+dep.name+") found!")
+                return dep_check
+            else:
+                err.log("Dependency ("+dep.name+") installed but dependency needs a different version!")
+
         if dep.is_executable():
             installed_dep = dep.find_executable()
             if installed_dep:
-                if installed_dep.dep.version.ge(dep.version):
+                if installed_dep.dep.version.eq(dep.version):
                     log.log("Dependency ("+dep.name+") found!")
                     self.installed_deps[dep.name] = dep.find_executable()
                 else:
@@ -91,16 +100,46 @@ class dependency_handler:
             dep_check = dep_check and self.check_dependency( dep )
         return dep_check
 
-    def check_dependencies( self ):
-        self.read_dependency_file( self.deps_filename )
+    def check_dependencies( self, group ):
         dep_check = True
-        if self.deps_to_install:
-            for dep in self.tagged_deps[self.deps_to_install]:
-                dep_check = self.check_dependencies_helper( self.deps_dict[dep] )
-        else:
-            for dep in self.dependencies:
-                dep_check = self.check_dependencies_helper( dep )
+        for g, dl in self.tagged_deps.items():
+            if group == "default" or group == g:
+                for d in dl:
+                    if not g.startswith("optional:"):
+                        dep_check = dep_check and self.check_dependencies_helper( self.deps_dict[d] )
+            elif group == "all":
+                for d in dl:
+                    dep_check = dep_check and self.check_dependencies_helper( self.deps_dict[d] )
         return dep_check
+
+    def remove_dependency(self, dep_name):
+        packman = str_to_class(get_package_manager_name())()
+        if not dep_name in self.installed_deps:
+            err.log("Dependency ("+dep_name+") not installed")
+        dep = self.installed_deps[dep_name].dep
+        if self.installed_deps[dep_name].files:
+            for f in self.installed_deps[dep_name].files:
+                os.remove(f)
+                try:
+                    os.rmdir(os.path.dirname(f))
+                except:
+                    pass
+        elif self.installed_deps[dep_name].provided:
+            packman.remove_dependency(dep)
+        else:
+            err.log("Dependency ("+dep_name+") was not installed via eosio.depman")
+        self.installed_deps.pop(dep.name, None)
+
+    def get_prefix(self, dep_name):
+        if dep_name in self.installed_deps:
+            return self.installed_deps[dep_name].path
+        else:
+            err.log("Dependency ("+dep_name+") not available")
+
+    def check_if_uid_satisfied(self, pfx):
+        self.prefix = os.path.abspath(os.path.realpath(os.path.expanduser(pfx)))
+        if not is_owner_for_dir(self.prefix):
+            err.log("Prefix for installation <"+self.prefix+"> needs root access, use sudo")
 
     def write_installed_deps_file( self ):
         deps_file = open(os.path.join(get_home_dir(), ".eosio.install.deps"), "wb")
@@ -126,154 +165,53 @@ class dependency_handler:
 
         except Exception as Ex:
             pass
-    
-    def remove_dependency(self, dep_name):
-        packman = str_to_class(get_package_manager_name())()
-        dep = self.installed_deps[dep_name].dep
-        if self.installed_deps[dep_name].files:
-            for f in self.installed_deps[dep_name].files:
-                shutil.remove(f)
-        elif self.installed_deps[dep_name].provided:
-            packman.remove_dependency(dep)
-        self.installed_deps.pop(dep.name, None)
 
-    def read_dependency_file( self, dep_fname ):
-        dep_file = open( dep_fname, "r" )
-        mode = 0
-        tag_name = ""
-        os_name, dist, ver = get_os()
-        for line in dep_file:
-            if self.comment_re.match(line) or not line or line == '\n':
-                continue
+    def read_dependency_file(self, fname):
+        dep_file_parser = parser.parser()
+        self.deps_dict, self.tagged_deps = dep_file_parser.parse( fname )
 
-            if self.tag_re.match(line):
-                if (line.lstrip().rstrip()[1:-1] == "dependencies"):
-                    mode = 1
-                elif (strip(line)[1:-1] == "urls"):
-                    mode = 3
-                elif (strip(line)[1:-1] == "commands"):
-                    mode = 4
-                elif (strip(line)[1:-1] == "packages"):
-                    mode = 5
-                else:
-                    tag_name = line.lstrip().rstrip()[1:-1]
-                    if (tag_name not in self.tagged_deps):
-                        self.tagged_deps[tag_name] = list()
-
-                    mode = 2
-                continue
-
-            ### [dependencies]
-            if mode == 1:
-                dep_name = strip(line.split(":")[0])
-                ds = strip(line.split(":")[1])[1:-1].split(",")
-                is_strict = ds[0].startswith(">=")
-                if ds[0] == "any":
-                    vers = version(-1, -1)
-                else:
-                    vers = version(int(strip(ds[0].replace(">=", "")).split(".")[0]), int(strip(ds[0].replace(">=", "")).split(".")[1]))
-                dep = dependency( dep_name, vers, strip(ds[1]), strip(ds[2]) )
-                dep.strict = is_strict
-                self.dependencies.append( dep )
-                self.deps_dict[dep.name] = dep
-            
-            ### [tag]
-            elif mode == 2:
-                self.tagged_deps[tag_name].append(line.lstrip().rstrip())
-
-            ### [urls]
-            elif mode == 3:
-                dep_name = strip(line.split(":", 1)[0])
-                tmp = strip(strip(line.split(":", 1)[1])[1:-1])
-                tag = strip(strip(tmp.split(":", 2)[0]))
-                spec = strip(strip(tmp.split(":", 2)[1]))
-                url = strip(strip(tmp.split(":", 2)[2]))
-                if (tag == "source"):
-                    if (spec == "all" or spec == dist+"<"+ver+">" or spec == dist):
-                        self.deps_dict[dep_name].source_url = url
-                elif (tag == "bin"):
-                    if (spec == "all" or spec == dist+"<"+ver+">" or spec == dist):
-                        self.deps_dict[dep_name].bin_url = url
-                else:
-                    err.log("Unsupported url type "+tag) 
-
-            ### [commands]
-            elif mode == 4:
-                dep_name = strip(line.split(":", 1)[0])
-                tmp = strip(strip(line.split(":", 1)[1])[1:-1])
-                tag = strip(strip(tmp.split(":", 2)[0]))
-                spec = strip(strip(tmp.split(":", 2)[1]))
-                cmds = strip(strip(tmp.split(":", 2)[2]))
-                if (tag == "pre_build"):
-                    if (spec == "all" or spec == dist+"<"+ver+">" or spec == dist):
-                        self.deps_dict[dep_name].pre_build_cmds = cmds
-                elif (tag == "build"):
-                    if (spec == "all" or spec == dist+"<"+ver+">" or spec == dist):
-                        self.deps_dict[dep_name].build_cmds = cmds
-                elif (tag == "install"):
-                    if (spec == "all" or spec == dist+"<"+ver+">" or spec == dist):
-                        self.deps_dict[dep_name].install_cmds = cmds
-                else:
-                    err.log("Unsupported command type "+tag) 
-
-            ### [packages]
-            elif mode == 5:
-                dep_name = strip(line.split(":", 1)[0])
-                tmp = strip(strip(line.split(":", 1)[1])[1:-1])
-                for pair in tmp.split(","):
-                    tag = strip(strip(pair.split(":", 1)[0]))
-                    name = strip(strip(pair.split(":", 1)[1]))
-                    if tag == "all":
-                        self.deps_dict[dep_name].package_name = name
-                    else:
-                        if tag == dist+"<"+ver+">" or tag == dist:
-                            self.deps_dict[dep_name].package_name = name
-                            break
-                        else:
-                            continue
-
-    def get_prefix(self, dep_name):
-        if dep_name in self.installed_deps:
-            return self.installed_deps[dep_name].path
-        else:
-            err.log("Dependency ("+dep_name+") not available")
-
-    def check_if_uid_satisfied(self, pfx):
-        self.prefix = os.path.abspath(os.path.realpath(os.path.expanduser(pfx)))
-        if not is_owner_for_dir(self.prefix):
-            err.log("Prefix for installation <"+self.prefix+"> needs root access, use sudo")
+        for k, v in self.deps_dict.items():
+            self.dependencies.append(v)
 
     def __init__(self, pfx, install):
         import_package_managers()
         self.deps_to_install = install
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Manager for dependencies")
-    parser.add_argument('--verbose', dest='verbose', action="store_true", default=False)
-    parser.add_argument('--prefix', type=str, dest='prefix', default="/usr/local")
-    parser.add_argument('--query', type=str, dest='query', default="")
-    parser.add_argument('--path', type=str, dest='path', default="")
-    parser.add_argument('--check', dest='check', action='store_true', default=False)
-    parser.add_argument('--install', type=str, dest='install', default="")
-    parser.add_argument('--remove', type=str, dest='remove', default="")
-    parser.add_argument('--remove-all', dest='remove_all', action="store_true", default=False)
-    parser.add_argument('--install-dir', type=str, dest='install_dir', default="")
-    parser.add_argument('file', type=str, nargs='?')
+    arg_parser = argparse.ArgumentParser(description="Manager for dependencies")
+    arg_parser.add_argument('--verbose', dest='verbose', action="store_true", default=False)
+    arg_parser.add_argument('--prefix', type=str, dest='prefix', default="/usr/local")
+    arg_parser.add_argument('--query', type=str, dest='query', default="")
+    arg_parser.add_argument('--path', type=str, dest='path', default="")
+    arg_parser.add_argument('--check', dest='check', action='store_true', default=False)
+    arg_parser.add_argument('--install-group', type=str, dest='install_group', default="default")
+    arg_parser.add_argument('--install', type=str, dest='install', default="")
+    arg_parser.add_argument('--remove', type=str, dest='remove', default="")
+    arg_parser.add_argument('--remove-all', dest='remove_all', action="store_true", default=False)
+    arg_parser.add_argument('--install-dir', type=str, dest='install_dir', default="")
+    arg_parser.add_argument('--source-only', dest='source_only', action='store_true', default=False)
+    arg_parser.add_argument('file', type=str, nargs='?')
 
-    args = parser.parse_args()
+    args = arg_parser.parse_args()
+#    try:
     handler = dependency_handler( args.prefix, args.install )
-    handler.read_installed_deps_file()
+    deps_filename = "eosio.deps"
+
     if args.verbose:
         verbose_log.silence = False
     if args.file:
-        handler.deps_filename = args.file
+        deps_filename = args.file
+    
+    handler.read_dependency_file( deps_filename )
+    handler.read_installed_deps_file()
+
     if args.check:
         handler.check_only = True
-        if not handler.check_dependencies():
+        if not handler.check_dependencies(args.install_group):
             exit(-1)
         exit(0)
     if args.query:
-        log.log("Prefix for "+args.query+" : "+handler.get_prefix(strip(args.query)))
+        log.log(args.query+" : version ("+handler.deps_dict[args.query].version.to_string()+") -- installed at ("+handler.get_prefix(strip(args.query))+")")
         exit(0)
     if args.install_dir:
         log.log(handler.get_prefix(strip(args.install_dir)))
@@ -287,20 +225,18 @@ if __name__ == "__main__":
             handler.remove_dependency(k)
         handler.write_installed_deps_file()
         exit(0)
+    if args.source_only:
+        handler.set_source_only(True)
 
-    handler.check_if_uid_satisfied( args.prefix )
-    handler.check_dependencies()
-    handler.write_installed_deps_file()
-    exit(0)
-    try:
-        handler = dependency_handler( args.prefix, args.install )
-        handler.read_installed_deps_file()
-        if args.query:
-            log.log("Prefix for "+args.query+" : "+handler.get_prefix(args.query))
-            exit(0)
+    if args.install:
+        handler.check_dependencies_helper(handler.deps_dict[args.install])
+    else:
         handler.check_if_uid_satisfied( args.prefix )
-        handler.check_dependencies()
+        handler.check_dependencies(args.install_group)
+    try:
         handler.write_installed_deps_file()
-    except Exception as ex:
-        warn.log(str(ex))
-        err.log("Critical failure")
+    except:
+        pass
+#    except Exception as ex:
+#        warn.log(str(ex))
+#        err.log("Critical failure")

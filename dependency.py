@@ -1,19 +1,5 @@
 import os, re
-from json import JSONEncoder, JSONDecoder, dumps
 from util import execute_cmd_dump_output, execute_cmd
-
-class dependency_encoder(JSONEncoder):
-    def default(self, o):
-        return o.__dict__
-
-def serialize( installed_dep ):
-    return dumps(installed_dep, cls=dependency_encoder)
-
-def from_json( jo ):
-    return installed_dependency( jo["dep"], jo["provided"], jo["path"], jo["files"])
-
-def deserialize( js ):
-    return JSONDecoder(object_hook = from_json).decode(js)
 
 class dependency:
     def __init__(self, nm, vs, st, pn, en, bs, su, bu, pbc, bc, ic):
@@ -91,14 +77,28 @@ class version:
     def __init__(self, major, minor):
         self.major = int(major)
         self.minor = int(minor)
+    
+    def satisfies(self, is_strict, v):
+        if self.major == -1 and self.minor == -1:
+            return True
+        if v.major == -1 and v.minor == -1:
+            return True
+        if is_strict:
+            return self.major == v.major and self.minor == v.minor
+        else:
+            return self.major >= v.major and self.minor >= v.minor
 
     def ge(self, v):
         if self.major == -1 and self.minor == -1:
+            return True
+        if v.major == -1 and v.minor == -1:
             return True
         return self.major >= v.major and self.minor >= v.minor
 
     def eq(self, v):
         if self.major == -1 and self.minor == -1:
+            return True
+        if v.major == -1 and v.minor == -1:
             return True
         return self.major == v.major and self.minor == v.minor
 

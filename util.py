@@ -78,7 +78,10 @@ def get_file_dir():
 
 ### get the uid of the parent even in sudo
 def get_original_uid():
-    return [os.getuid(), os.getgid()]
+    if 'SUDO_USER' in os.environ:
+        return [pwd.getpwnam(os.environ['SUDO_USER']).pw_uid, grp.getgrnam(os.environ['SUDO_USER']).gr_gid]
+    else:
+        return [pwd.getpwnam(os.environ['USER']).pw_uid, grp.getgrnam(os.environ['USER']).gr_gid]
 
 def get_package_manager_name():
     if is_linux():

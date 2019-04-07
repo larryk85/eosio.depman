@@ -27,17 +27,13 @@ class brew(package_manager):
         eo, ee, ec = execute_cmd("brew list --versions "+dep.package_name)
         ### installed
         if vers and eo and ec == 0:
-            if vers.ge(dep.version):
+            if vers.satisfies(dep.strict, dep.version):
                 return self.installed
             else:
                 return self.installed_wrong
         elif vers:
-            if dep.strict:
-                if vers.eq(dep.version):
-                    return self.not_installed
-            else: 
-                if vers.ge(dep.version):
-                    return self.not_installed
+            if vers.satisfies(dep.strict, dep.version):
+                return self.not_installed
         return self.not_satisfiable
 
     def install_dependency(self, dep):

@@ -1,0 +1,57 @@
+### version, optional build system type
+[dependencies]
+   make       : [any,   exe, none]
+   autoconf   : [any,   exe, none]
+   libtool    : [any,   exe, none]
+   gettext    : [any,   lib, autoconf]
+   GMP        : [any,   lib, autoconf]
+   cmake      : [>=3.4, exe, autoconf]
+   python2.7  : [2.7,    exe, autoconf]
+   openssl    : [>=1.0,  lib, autoconf]
+#   doxygen  : [1.8,   exe, cmake]
+#   clang8   : [8.0,   exe, cmake]
+#   llvm4    : [4.0,   lib, cmake]
+#llvm4 : [14.0, lib, cmake]
+#llvm4 : [14.0, cmake_ninja]
+
+### urls for dependency sources
+# 2 pre defined identifiers `source` and `bin` these are used for either source locations or pre-built
+# binary locations
+[urls]
+   gettext   : [source:all: https://ftp.gnu.org/pub/gnu/gettext/gettext-0.19.tar.gz]
+   libtool   : [source:all: http://ftpmirror.gnu.org/libtool/libtool-2.4.6.tar.gz]
+   cmake     : [source:all: https://github.com/Kitware/CMake/releases/download/v3.13.4/cmake-3.13.4.tar.gz]
+   GMP       : [source:all: https://ftp.gnu.org/gnu/gmp/gmp-6.1.2.tar.xz]
+   python2.7 : [source:all: https://www.python.org/ftp/python/2.7.16/Python-2.7.16.tgz]
+   openssl   : [source:all: https://www.openssl.org/source/openssl-1.1.0j.tar.gz]
+#   cmake : [source:all:('print("Hello")'): https://github.com/Kitware/CMake/releases/download/v3.13.4/cmake-3.13.4.tar.gz]
+#   cmake : [bin:Ubuntu<16.04> : https://github.coom/stuf.tar.gz]
+
+#llvm4 : [source:all : https://github.com/llvm/llvm-project/archive/llvmorg-4.0.1.zip]
+#llvm4 : [bin:Ubuntu : https://releases.llvm.org/4.0.1/clang+llvm-4.0.1-x86_64-linux-gnu-debian8.tar.xz]
+
+### listing for package names
+[packages]
+   make      : [all:make]
+   gettext   : [all:gettext]
+   libtool   : [all:libtool]
+   cmake     : [all:cmake]
+   python2.7 : [Ubuntu:python2.7]
+   GMP       : [Ubuntu:libgmp3-dev]
+   openssl   : [Ubuntu:libssl-dev]
+#   llvm4 : [Ubuntu:llvm-4.0, OSX:llvm@4]
+
+### build commands, install commands
+#[commands]
+#llvm4 : [pre_build:all:"../llvm"]
+#cmake : [pre-build:all:"stuff", build:Ubuntu<18.04>:"something"]
+
+[groups]
+   [system]
+      make
+      gettext
+      #libtool
+      GMP
+      openssl
+      cmake
+      python2.7

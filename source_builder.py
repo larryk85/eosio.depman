@@ -1,17 +1,20 @@
 import os, shutil, json, pickle
+from pathlib import Path
 from logger import err, warn, log
 from cleanup import register_cleanup_routine
 from util import str_to_class, get_temp_dir, get_home_dir, get_original_uid
-from dependency import dependency, installed_dependency, version, serialize
+from dependency import dependency, installed_dependency, version
 from build_system import build_system, noop_build_system, import_build_systems
 
 class source_builder:
     def __init__(self):
         import_build_systems()
     
-    def check_install(self, installed_files):
+    def check_install(self, prefix, installed_files):
         for f in installed_files:
-            if os.path.isfile(f):
+            if os.path.isfile(f) and \
+               not ( os.path.commonprefix([os.path.dirname(f), os.path.join(prefix, "share")]) == os.path.join(prefix, "share") or \
+               os.path.commonprefix([os.path.dirname(f), os.path.join(prefix, "doc")]) == os.path.join(prefix, "doc") ):
                 return True
         return False
         
@@ -67,7 +70,7 @@ class source_builder:
             pass
 
         ### check whether currently installed
-        if self.check_install(filenames):
+        if self.check_install(prefix, filenames):
             err.log("Dependency "+dep.name+" is already installed at location "+prefix)
 
         for i in range(0, len(filenames)):
@@ -76,10 +79,10 @@ class source_builder:
             except:
                 pass
             ### install to the prefix
-
             shutil.move( old_filenames[i], filenames[i] )
         ### chown back to user if prefix is home rooted
         if os.path.commonprefix([get_home_dir(), filenames[i]]):
+            os.chown( prefix, get_original_uid()[0], get_original_uid()[1] )
             for root, dirs, files in os.walk(prefix):
                 for d in dirs:
                     os.chown(os.path.join(root, d), get_original_uid()[0], get_original_uid()[1])
