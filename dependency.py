@@ -31,11 +31,11 @@ class dependency:
         eo, ee, ec = execute_cmd("which "+self.name)
         if eo and ec == 0:
             neo, ee, ec = execute_cmd(self.name+" --version")
-            print(re.findall("\d+.\d+", neo))
-            vers_str = re.findall("\d+.\d+", neo)[0]
-            dep = dependency(self.name, version(vers_str.split(".")[0], vers_str.split(".")[1]), "exe", "none")
-            installed_dep = installed_dependency( dep, False, os.path.dirname(eo), list() )
-            return installed_dep
+            if neo and ec == 0:
+                vers_str = re.findall("\d+.\d+", neo)[0]
+                dep = dependency(self.name, version(vers_str.split(".")[0], vers_str.split(".")[1]), "exe", "none")
+                installed_dep = installed_dependency( dep, False, os.path.dirname(eo), list() )
+                return installed_dep
         return None
 
     name             = "***"

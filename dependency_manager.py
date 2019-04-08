@@ -66,7 +66,7 @@ class dependency_handler:
                     self.installed_deps[dep.name] = installed
             else:
                 self.installed_deps[dep.name] = installed_dependency(dep, True, packman.prefix(dep), "") 
-            return False
+            return True
         elif res == package_manager.not_satisfiable:
             if (not self.check_only):
                 warn.log( "Dependency ("+dep.name+" : "+dep.version.to_string()+") not satisfiable, doing a source install!" )
