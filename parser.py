@@ -5,7 +5,7 @@ from lark import Lark
 
 class parser:
     parser = Lark(r"""
-            start: dependencies urls* packages* commands* groups*
+            start: dependencies (urls|packages|commands|groups|relative_prefix|repo)*
             dependencies: DEP_TAG (dep_rule_pair)*
 
             dep_rule_pair: STR ":" dep_tuple
@@ -31,6 +31,14 @@ class parser:
             groups: GROUPS_TAG (group)*
             group: GROUP_TAG (group_item)*
             group_item: STR
+            
+            relative_prefix: RELATIVE_PREFIX_TAG (relative_prefix_pair)*
+            relative_prefix_pair: STR ":" "[" relative_prefix_rule ("," relative_prefix_rule)* "]" 
+            relative_prefix_rule: system_type (":" constraint)* ":" ESCAPED_STRING
+
+            repo: REPO_TAG (repo_pair)*
+            repo_pair: system_type ":" "[" repo_rule ("," repo_rule)* "]"
+            repo_rule: ESCAPED_STRING
 
             COMMENT: /#[^\n]*/
             STR: /[a-zA-Z_][\w\.-]*/
@@ -41,16 +49,18 @@ class parser:
             URL_TAG: /\[[ \t\n\r]*urls[ \t\n\r]*\]/
             PACKAGE_TAG: /\[[ \t\n\r]*packages[ \t\n\r]*\]/
             COMMANDS_TAG: /\[[ \t\n\r]*commands[ \t\n\r]*\]/
+            RELATIVE_PREFIX_TAG: /\[[ \t\n\r]*relative\-prefix[ \t\n\r]*\]/
+            REPO_TAG: /\[[ \t\n\r]*repo[ \t\n\r]*\]/
             GROUPS_TAG: /\[[ \t\n\r]*groups[ \t\n\r]*\]/
             GROUP_TAG: (/\[[ \t\n\r]*/)(/optional::/)? STR (/[ \t\n\r]*\]/)
             VERSION: /([0-9]+\.[0-9]+)|[0-9]+|any/
-            PACKAGE_NAME: SSTR (/-|@/)? VERSION? (/-dev/)?
+            PACKAGE_NAME: SSTR (/-|@/)? VERSION? (/[\-0-9]/)* SSTR* (/-dev/)?
             PREBUILD: /pre-build/
             BUILD: /build/
             INSTALL: /install/
             DEP_TYPE: /(exe|lib)/
             URL_TYPE: /(bin|source)/
-            URL: /http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+(tgz|gz|xz|zip|tar)/
+            URL: /http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+(bz2|tgz|gz|xz|zip|tar)/
             ALL: /all/
             BUILD_TYPE: /none/ | STR
             ANY: /..*/
@@ -70,6 +80,7 @@ class parser:
         
         tagged_dependencies = dict()
         dependencies = dict()
+        repos = list()
         obj = self.parser.parse( dep_str )
 
         os_name, dist, ver = util.get_os()
@@ -119,6 +130,22 @@ class parser:
                             else:
                                 if not dependencies[cc.children[0]].source_url:
                                     dependencies[cc.children[0]].source_url = str(url)
+
+            elif child.data == "relative-prefix":
+                print("REL")
+                print(child.children[1:])
+
+            elif child.data == "repo":
+                for cc in child.children[1:]:
+                    sys_type = child.children[1].children[0].children[0]
+                    sys_type += "<"+child.children[1].children[0].children[1].children[0]+">"
+
+                    if should_add and \
+                       sys_type == "all" or \
+                       sys_type == dist  or \
+                       sys_type == dist+"<"+ver+">":
+                        for ccc in cc.children[1:]:
+                            repos.append(ccc.children[0].lstrip('"').rstrip('"'))
 
             elif child.data == "packages":
                 for cc in child.children[1:]:
@@ -181,4 +208,4 @@ class parser:
                             tagged_dependencies[group] = list()
                         tagged_dependencies[group].append(str(ccc.children[0]))
 
-        return [dependencies, tagged_dependencies] 
+        return [dependencies, tagged_dependencies, repos] 

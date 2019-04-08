@@ -31,6 +31,7 @@ class dependency:
         eo, ee, ec = execute_cmd("which "+self.name)
         if eo and ec == 0:
             neo, ee, ec = execute_cmd(self.name+" --version")
+            print(re.findall("\d+.\d+", neo))
             vers_str = re.findall("\d+.\d+", neo)[0]
             dep = dependency(self.name, version(vers_str.split(".")[0], vers_str.split(".")[1]), "exe", "none")
             installed_dep = installed_dependency( dep, False, os.path.dirname(eo), list() )
@@ -61,7 +62,12 @@ class installed_dependency:
         cmd_str = ""
         for cmd in cmds:
             cmd_str += " "+cmd
-        return execute_cmd_dump_output(os.path.join(self.path, self.dep.name)+cmd_str)
+        _bin = ""
+        if os.path.isfile(os.path.join(self.path, self.dep.name)):
+            _bin = os.path.join(self.path, self.dep.name)
+        else:
+            _bin = os.path.join(self.path, "bin", self.dep.name)
+        return execute_cmd_dump_output(_bin+cmd_str)
 
     dep      = None
     provided = False

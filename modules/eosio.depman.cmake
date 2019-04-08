@@ -1,12 +1,14 @@
 cmake_minimum_required( VERSION 3.5 )
 
 macro (find_depman Var)
-   find_file(Var "eosio.depman" PATHS ${CMAKE_MODULE_PATH}/../)
+   foreach(elem ${CMAKE_MODULE_PATH})
+      list(APPEND new_modules_path "${elem}/../")
+   endforeach()
+   find_file(${Var} "eosio.depman" PATHS ${new_modules_path})
 endmacro()
 
 macro (check_dependencies dep_file)
-   find_file(DepMan "eosio.depman" PATHS ${CMAKE_MODULE_PATH}/../)
-   message(STATUS "DPE ${DepMan}")
+   find_depman(DepMan)
    execute_process(COMMAND "${DepMan}" "${dep_file}" "--check"
       RESULT_VARIABLE    cmd_res
       ERROR_VARIABLE     cmd_error
@@ -18,10 +20,16 @@ macro (check_dependencies dep_file)
    endif()
 endmacro()
 
-macro (get_dependency_prefix dep_file dep_name)
-   find_file(DepMan "eosio.depman" PATHS ${CMAKE_MODULE_PATH}/../)
-   execute_process(COMMAND "${DepMan}" "dep_file" "--query ${dep_name}"
+macro (get_dependency_prefix dep_file dep_name output)
+   find_depman(DepMan)
+   execute_process(COMMAND "${DepMan}" "${dep_file}" "--install-dir ${dep_name}" "--no-color"
       RESULT_VARIABLE cmd_res
-      ERROR_FILE      cmd_error
-      OUTPUT_FILE     cmd_output)
+      ERROR_VARIABLE  cmd_error
+      OUTPUT_VARIABLE cmd_output)
+
+   string(REGEX REPLACE "\n$" "" cmd_output "${cmd_output}")
+   if (${cmd_res} STREQUAL "0")
+      message(STATUS "Found dependency ${dep_name} at ${cmd_output}")
+      set(${output} ${cmd_output})
+   endif()
 endmacro()

@@ -11,7 +11,7 @@ class cmake(build_system):
 
     def build(self, installed, dep):
         log.log("cmake : build step for "+dep.name)
-        return installed["make"].execute("-j ", dep.build_cmds)
+        return installed["make"].execute("-j8", dep.build_cmds)
 
     def install(self, installed, dep):
         log.log("cmake : install step for "+dep.name)

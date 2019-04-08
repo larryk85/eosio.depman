@@ -16,11 +16,17 @@ class apt_get(package_manager):
             vers_str = self.strip_pre(eo.split()[4])
             return version(int(self.strip_suff(vers_str.split(".")[0])), int(self.strip_suff(vers_str.split(".")[1])))
         return None
+    
+    def add_repo(self, repo):
+        eo, ee, ec = execute_cmd("add-apt-repository ppa:"+repo)
+        if eo and ec == 0:
+            return True
+        return False
 
     def prefix(self, dep):
         eo, ee, ec = execute_cmd("dpkg -L "+dep.package_name)
         if eo and ec == 0:
-            return os.path.commonpath(eo.split())
+            return os.path.join(os.path.commonprefix(eo.split()[1:]), "lib", dep.package_name)
         return None
 
     def check_dependency(self, dep):

@@ -1,5 +1,12 @@
 import os, sys
 import cleanup
+
+colorize = True
+
+def set_log_colorize( should_colorize ):
+    global colorize
+    colorize = should_colorize
+
 class logger:
     red    = "91;1"
     green  = "92"
@@ -15,12 +22,12 @@ class logger:
         self.should_exit = se
         
     def log(self, s):
+        global colorize
         if not self.silence:
-            print("\33["+self.color+"m"+s+"\33[0m")
-            #if os.fstat(sys.stdout.fileno()).st_mode == 4096: # if we are not piping to a file
-            #    print("\33["+self.color+"m"+s+"\33[0m")
-            #else:
-            #    print(s)
+            if colorize: 
+                print("\33["+self.color+"m"+s+"\33[0m")
+            else:
+                print(s)
         if self.should_exit:
             cleanup.cleanup()
             exit(-1)

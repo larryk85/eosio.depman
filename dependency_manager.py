@@ -2,7 +2,7 @@
 
 import sys, os, subprocess, platform, distro, pickle
 import urllib.request, shutil, argparse, json, re
-from logger import err, warn, log, verbose_log
+from logger import err, warn, log, verbose_log, set_log_colorize
 from util import strip, str_to_class, get_os, get_temp_dir, get_install_dir, get_file_dir, get_home_dir, get_package_manager_name, is_owner_for_dir, get_original_uid
 from dependency import dependency, installed_dependency, version
 from package_manager import package_manager, import_package_managers
@@ -22,8 +22,9 @@ class dependency_handler:
     check_only        = False
     source_only       = False
     deps_to_install   = ""
-    local_deps = dict()
-    system_deps = dict()
+    repos             = list()
+    local_deps        = dict()
+    system_deps       = dict()
 
     def download_dependency_and_unpack( self, dep, use_bin ):
         log.log("Downloading "+dep.name)
@@ -32,12 +33,14 @@ class dependency_handler:
             url = dep.bin_url
         else:
             url = dep.source_url
+        if not url:
+            err.log("Can't do a source build for dependency ("+dep.name+")")
         base_name = os.path.basename(url)
-        urllib.request.urlretrieve( url, self.temp_dir+"/"+base_name )
-        shutil.unpack_archive( self.temp_dir+"/"+base_name, self.temp_dir+"/"+dep.name )
+        urllib.request.urlretrieve( url, os.path.join(self.temp_dir, base_name) )
+        shutil.unpack_archive( os.path.join(self.temp_dir, base_name), os.path.join(self.temp_dir, dep.name) )
 
         log.log("Unpacked "+base_name)
-        os.remove( self.temp_dir+"/"+base_name )
+        os.remove( os.path.join(self.temp_dir, base_name) )
     
     def set_source_only( self, is_source_only ):
         self.source_only = is_source_only
@@ -54,8 +57,12 @@ class dependency_handler:
                     ### fallback
                     self.download_dependency_and_unpack( dep, len(dep.bin_url) > 0 )
                     sb = source_builder()
-                    sb.build( self.installed_deps, dep )
-                    installed = sb.install( self.installed_deps, dep, self.prefix )
+                    installed = None
+                    if dep.bin_url:
+                        installed = sb.install_binary( self.installed_deps, dep, self.prefix )
+                    else:
+                        sb.build( self.installed_deps, dep )
+                        installed = sb.install( self.installed_deps, dep, self.prefix )
                     self.installed_deps[dep.name] = installed
             else:
                 self.installed_deps[dep.name] = installed_dependency(dep, True, packman.prefix(dep), "") 
@@ -65,8 +72,12 @@ class dependency_handler:
                 warn.log( "Dependency ("+dep.name+" : "+dep.version.to_string()+") not satisfiable, doing a source install!" )
                 self.download_dependency_and_unpack( dep, len(dep.bin_url) > 0 )
                 sb = source_builder()
-                sb.build( self.installed_deps, dep )
-                installed = sb.install( self.installed_deps, dep, self.prefix )
+                installed = None
+                if dep.bin_url:
+                    installed = sb.install_binary( self.installed_deps, dep, self.prefix )
+                else:
+                    sb.build( self.installed_deps, dep )
+                    installed = sb.install( self.installed_deps, dep, self.prefix )
                 self.installed_deps[dep.name] = installed
                 return True
             else:
@@ -112,22 +123,23 @@ class dependency_handler:
                     dep_check = dep_check and self.check_dependencies_helper( self.deps_dict[d] )
         return dep_check
 
-    def remove_dependency(self, dep_name):
+    def remove_dependency(self, dep_name, strict):
         packman = str_to_class(get_package_manager_name())()
         if not dep_name in self.installed_deps:
             err.log("Dependency ("+dep_name+") not installed")
         dep = self.installed_deps[dep_name].dep
         if self.installed_deps[dep_name].files:
             for f in self.installed_deps[dep_name].files:
-                os.remove(f)
                 try:
+                    os.remove(f)
                     os.rmdir(os.path.dirname(f))
                 except:
                     pass
         elif self.installed_deps[dep_name].provided:
             packman.remove_dependency(dep)
         else:
-            err.log("Dependency ("+dep_name+") was not installed via eosio.depman")
+            if strict:
+                err.log("Dependency ("+dep_name+") was not installed via eosio.depman")
         self.installed_deps.pop(dep.name, None)
 
     def get_prefix(self, dep_name):
@@ -140,6 +152,12 @@ class dependency_handler:
         self.prefix = os.path.abspath(os.path.realpath(os.path.expanduser(pfx)))
         if not is_owner_for_dir(self.prefix):
             err.log("Prefix for installation <"+self.prefix+"> needs root access, use sudo")
+    
+    def add_repos(self):
+        packman = str_to_class(get_package_manager_name())()
+        for repo in self.repos:
+            if not packman.add_repo(repo):
+                err.log("Repo ("+repo+") not available")
 
     def write_installed_deps_file( self ):
         deps_file = open(os.path.join(get_home_dir(), ".eosio.install.deps"), "wb")
@@ -168,7 +186,7 @@ class dependency_handler:
 
     def read_dependency_file(self, fname):
         dep_file_parser = parser.parser()
-        self.deps_dict, self.tagged_deps = dep_file_parser.parse( fname )
+        self.deps_dict, self.tagged_deps, self.repos = dep_file_parser.parse( fname )
 
         for k, v in self.deps_dict.items():
             self.dependencies.append(v)
@@ -176,10 +194,12 @@ class dependency_handler:
     def __init__(self, pfx, install):
         import_package_managers()
         self.deps_to_install = install
+        self.prefix = os.path.expanduser(pfx)
 
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser(description="Manager for dependencies")
     arg_parser.add_argument('--verbose', dest='verbose', action="store_true", default=False)
+    arg_parser.add_argument('--no-color', dest='no_color', action="store_false", default=True)
     arg_parser.add_argument('--prefix', type=str, dest='prefix', default="/usr/local")
     arg_parser.add_argument('--query', type=str, dest='query', default="")
     arg_parser.add_argument('--path', type=str, dest='path', default="")
@@ -199,6 +219,7 @@ if __name__ == "__main__":
 
     if args.verbose:
         verbose_log.silence = False
+    set_log_colorize(args.no_color)
     if args.file:
         deps_filename = args.file
     
@@ -217,16 +238,18 @@ if __name__ == "__main__":
         log.log(handler.get_prefix(strip(args.install_dir)))
         exit(0)
     if args.remove:
-        handler.remove_dependency(args.remove)
+        handler.remove_dependency(args.remove, True)
         handler.write_installed_deps_file()
         exit(0)
     if args.remove_all:
         for k in handler.installed_deps.copy():
-            handler.remove_dependency(k)
+            handler.remove_dependency(k, False)
         handler.write_installed_deps_file()
         exit(0)
     if args.source_only:
         handler.set_source_only(True)
+
+    handler.add_repos()
 
     if args.install:
         handler.check_dependencies_helper(handler.deps_dict[args.install])

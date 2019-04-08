@@ -1,5 +1,9 @@
 import atexit
-cleanup_routines = [ lambda : print("cleaning up") ]
+
+def null_func():
+    pass
+
+cleanup_routines = [ null_func ]
 
 def register_cleanup_routine( cr ):
     global cleanup_routine

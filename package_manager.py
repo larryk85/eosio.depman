@@ -18,6 +18,8 @@ class package_manager:
         pass
     def prefix(self, dep):
         pass
+    def add_repo(self, repo):
+        pass
     def check_dependency(self, dep):
         pass
     def install_dependency(self, dep):
