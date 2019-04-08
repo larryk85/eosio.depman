@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-import sys, os, subprocess, platform, distro, pickle
+import sys, os, subprocess, platform, distro, pickle, atexit
 import urllib.request, shutil, argparse, json, re
 from logger import err, warn, log, verbose_log, set_log_colorize
 from util import strip, str_to_class, get_os, get_temp_dir, get_install_dir, get_file_dir, get_home_dir, get_package_manager_name, is_owner_for_dir, get_original_uid
