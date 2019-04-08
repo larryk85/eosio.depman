@@ -213,53 +213,53 @@ if __name__ == "__main__":
     arg_parser.add_argument('file', type=str, nargs='?')
 
     args = arg_parser.parse_args()
-#    try:
-    handler = dependency_handler( args.prefix, args.install )
-    deps_filename = "eosio.deps"
-
-    if args.verbose:
-        verbose_log.silence = False
-    set_log_colorize(args.no_color)
-    if args.file:
-        deps_filename = args.file
-    
-    handler.read_dependency_file( deps_filename )
-    handler.read_installed_deps_file()
-
-    if args.check:
-        handler.check_only = True
-        if not handler.check_dependencies(args.install_group):
-            exit(-1)
-        exit(0)
-    if args.query:
-        log.log(args.query+" : version ("+handler.deps_dict[args.query].version.to_string()+") -- installed at ("+handler.get_prefix(strip(args.query))+")")
-        exit(0)
-    if args.install_dir:
-        log.log(handler.get_prefix(strip(args.install_dir)))
-        exit(0)
-    if args.remove:
-        handler.remove_dependency(args.remove, True)
-        handler.write_installed_deps_file()
-        exit(0)
-    if args.remove_all:
-        for k in handler.installed_deps.copy():
-            handler.remove_dependency(k, False)
-        handler.write_installed_deps_file()
-        exit(0)
-    if args.source_only:
-        handler.set_source_only(True)
-
-    handler.add_repos()
-
-    if args.install:
-        handler.check_dependencies_helper(handler.deps_dict[args.install])
-    else:
-        handler.check_if_uid_satisfied( args.prefix )
-        handler.check_dependencies(args.install_group)
     try:
-        handler.write_installed_deps_file()
-    except:
-        pass
-#    except Exception as ex:
-#        warn.log(str(ex))
-#        err.log("Critical failure")
+        handler = dependency_handler( args.prefix, args.install )
+        deps_filename = "eosio.deps"
+        atexit.register( lambda : handler.write_installed_deps_file() )
+        if args.verbose:
+            verbose_log.silence = False
+        set_log_colorize(args.no_color)
+        if args.file:
+            deps_filename = args.file
+        
+        handler.read_dependency_file( deps_filename )
+        handler.read_installed_deps_file()
+
+        if args.check:
+            handler.check_only = True
+            if not handler.check_dependencies(args.install_group):
+                exit(-1)
+            exit(0)
+        if args.query:
+            log.log(args.query+" : version ("+handler.deps_dict[args.query].version.to_string()+") -- installed at ("+handler.get_prefix(strip(args.query))+")")
+            exit(0)
+        if args.install_dir:
+            log.log(handler.get_prefix(strip(args.install_dir)))
+            exit(0)
+        if args.remove:
+            handler.remove_dependency(args.remove, True)
+            handler.write_installed_deps_file()
+            exit(0)
+        if args.remove_all:
+            for k in handler.installed_deps.copy():
+                handler.remove_dependency(k, False)
+            handler.write_installed_deps_file()
+            exit(0)
+        if args.source_only:
+            handler.set_source_only(True)
+
+        handler.add_repos()
+
+        if args.install:
+            handler.check_dependencies_helper(handler.deps_dict[args.install])
+        else:
+            handler.check_if_uid_satisfied( args.prefix )
+            handler.check_dependencies(args.install_group)
+        try:
+            handler.write_installed_deps_file()
+        except:
+            pass
+    except Exception as ex:
+        warn.log(str(ex))
+        err.log("Critical failure")
