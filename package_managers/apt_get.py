@@ -32,20 +32,18 @@ class apt_get(package_manager):
     def check_dependency(self, dep):
         eo, ee, ec = execute_cmd("apt-cache policy "+dep.package_name)
         vers = self.get_version(dep)
-        print("Strict")
-        print(dep.strict)
         if eo and ec == 0:
             ### not installed
             if eo.split()[2] == "(none)":
                 if vers and vers.satisfies(dep.strict, dep.version):
-                    return self.not_installed
+                    return [self.not_installed, ""]
                 else:
-                    return self.not_satisfiable
+                    return [self.not_satisfiable, ""]
             elif vers and vers.satisfies(dep.strict, dep.version):
-                return self.installed
+                return [self.installed, self.prefix( dep )]
             else:
                 return self.installed_wrong
-        return self.not_satisfiable
+        return [self.not_satisfiable, ""]
 
     def install_dependency(self, dep):
         log.log("Installing "+dep.name+" "+dep.package_name)

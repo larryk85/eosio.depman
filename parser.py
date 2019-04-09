@@ -30,7 +30,7 @@ class parser:
 
             groups: GROUPS_TAG (group)*
             group: GROUP_TAG (group_item)*
-            group_item: STR
+            group_item: STR ":" system_type (":" constraint)*
             
             relative_prefix: RELATIVE_PREFIX_TAG (relative_prefix_pair)*
             relative_prefix_pair: STR ":" "[" relative_prefix_rule ("," relative_prefix_rule)* "]" 
@@ -204,8 +204,15 @@ class parser:
                 for cc in child.children[1:]:
                     group = cc.children[0].lstrip('[').rstrip(']')
                     for ccc in cc.children[1:]:
-                        if not group in tagged_dependencies:
-                            tagged_dependencies[group] = list()
-                        tagged_dependencies[group].append(str(ccc.children[0]))
+                        os_str = ccc.children[1].children[0]
+                        if (len(ccc.children[1].children) > 1):
+                            os_str += "<"+ccc.children[1].children[1].children[0]+">"
+                        if should_add and \
+                           os_str == "all" or \
+                           os_str == dist  or \
+                           os_str == dist+"<"+ver+">":
+                           if not group in tagged_dependencies:
+                               tagged_dependencies[group] = list()
+                           tagged_dependencies[group].append(str(ccc.children[0]))
 
         return [dependencies, tagged_dependencies, repos] 

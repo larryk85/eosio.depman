@@ -28,13 +28,13 @@ class brew(package_manager):
         ### installed
         if vers and eo and ec == 0:
             if vers.satisfies(dep.strict, dep.version):
-                return self.installed
+                return [self.installed, self.prefix( dep )]
             else:
-                return self.installed_wrong
+                return [self.installed_wrong, ""]
         elif vers:
             if vers.satisfies(dep.strict, dep.version):
-                return self.not_installed
-        return self.not_satisfiable
+                return [self.not_installed, ""]
+        return [self.not_satisfiable, ""]
 
     def install_dependency(self, dep):
         log.log("Installing "+dep.name+" "+dep.package_name)

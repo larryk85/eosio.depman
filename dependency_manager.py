@@ -47,9 +47,10 @@ class dependency_handler:
 
     def check_dependency( self, dep ):
         packman = str_to_class(get_package_manager_name())()
-        res = packman.check_dependency( dep )
+        res, path = packman.check_dependency( dep )
         if res == package_manager.installed:
             log.log("Dependency ("+dep.name+") found!")
+            self.installed_deps[dep.name] = installed_dependency(dep, False, path, None)
             return True
         elif res == package_manager.not_installed:
             warn.log( "Dependency ("+dep.name+" : "+dep.version.to_string()+") not found!" )
@@ -104,11 +105,14 @@ class dependency_handler:
                     log.log("Dependency ("+dep.name+") found!")
                     self.installed_deps[dep.name] = dep.find_executable()
                 else:
-                    dep_check = dep_check and self.check_dependency( dep )
+                    res = self.check_dependency( dep )
+                    dep_check = dep_check and res
             else:
-                dep_check = dep_check and self.check_dependency( dep )
+                res = self.check_dependency( dep )
+                dep_check = dep_check and res
         else:
-            dep_check = dep_check and self.check_dependency( dep )
+            res = self.check_dependency( dep )
+            dep_check = dep_check and res
         return dep_check
 
     def check_dependencies( self, group ):
@@ -161,6 +165,8 @@ class dependency_handler:
                 err.log("Repo ("+repo+") not available")
 
     def write_installed_deps_file( self ):
+        if not len(self.installed_deps) > 0:
+           return
         deps_file = open(os.path.join(get_home_dir(), ".eosio.install.deps"), "wb")
         pickle.dump( self.installed_deps, deps_file )
         deps_file.close()
@@ -214,7 +220,7 @@ if __name__ == "__main__":
     arg_parser.add_argument('--install-dir', type=str, dest='install_dir', default="")
     arg_parser.add_argument('--source-only', dest='source_only', action='store_true', default=False)
     arg_parser.add_argument('--list', dest='list', action='store_true', default=False)
-    arg_parser.add_argument('file', type=str, nargs='?')
+    arg_parser.add_argument('file', type=str)
 
     args = arg_parser.parse_args()
     try:
@@ -224,8 +230,9 @@ if __name__ == "__main__":
         if args.verbose:
             verbose_log.silence = False
         set_log_colorize(args.no_color)
-        if args.file:
-            deps_filename = args.file
+        if not args.file:
+           err.log("Must specify dependency file")
+        deps_filename = args.file
         
         handler.read_dependency_file( deps_filename )
         handler.read_installed_deps_file()
@@ -262,10 +269,10 @@ if __name__ == "__main__":
         else:
             handler.check_if_uid_satisfied( args.prefix )
             handler.check_dependencies(args.install_group)
+    except Exception as ex:
         try:
-            handler.write_installed_deps_file()
+           handler.write_installed_deps_file()
         except:
             pass
-    except Exception as ex:
         warn.log(str(ex))
         err.log("Critical failure")
