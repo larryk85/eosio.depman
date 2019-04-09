@@ -129,6 +129,7 @@ class dependency_handler:
             err.log("Dependency ("+dep_name+") not installed")
         dep = self.installed_deps[dep_name].dep
         if self.installed_deps[dep_name].files:
+            log.log("Removing "+dep.name+" "+dep.package_name)
             for f in self.installed_deps[dep_name].files:
                 try:
                     os.remove(f)
@@ -165,9 +166,10 @@ class dependency_handler:
         deps_file.close()
         os.chown(os.path.join(get_home_dir(), ".eosio.install.deps"), get_original_uid()[0], get_original_uid()[1])
 
-        deps_file = open(os.path.join(get_file_dir(), ".eosio.install.deps"), "wb")
-        pickle.dump( self.installed_deps, deps_file )
-        deps_file.close()
+        if is_owner_for_dir(get_file_dir()):
+            deps_file = open(os.path.join(get_file_dir(), ".eosio.install.deps"), "wb")
+            pickle.dump( self.installed_deps, deps_file )
+            deps_file.close()
    
     def read_installed_deps_file( self ):
         try:
@@ -176,10 +178,11 @@ class dependency_handler:
             deps_file.close()
             self.installed_deps = self.local_deps.copy()
 
-            deps_file = open(os.path.join(get_file_dir(), ".eosio.install.deps"), "rb")
-            self.system_deps = pickle.load(deps_file)
-            deps_file.close()
-            self.installed_deps.update(self.system_deps)
+            if is_owner_for_dir(get_file_dir()):
+                deps_file = open(os.path.join(get_file_dir(), ".eosio.install.deps"), "rb")
+                self.system_deps = pickle.load(deps_file)
+                deps_file.close()
+                self.installed_deps.update(self.system_deps)
 
         except Exception as Ex:
             pass
@@ -210,6 +213,7 @@ if __name__ == "__main__":
     arg_parser.add_argument('--remove-all', dest='remove_all', action="store_true", default=False)
     arg_parser.add_argument('--install-dir', type=str, dest='install_dir', default="")
     arg_parser.add_argument('--source-only', dest='source_only', action='store_true', default=False)
+    arg_parser.add_argument('--list', dest='list', action='store_true', default=False)
     arg_parser.add_argument('file', type=str, nargs='?')
 
     args = arg_parser.parse_args()
@@ -237,14 +241,16 @@ if __name__ == "__main__":
         if args.install_dir:
             log.log(handler.get_prefix(strip(args.install_dir)))
             exit(0)
+        if args.list:
+            for k in handler.installed_deps.copy():
+                log.log(k)
+            exit(0)
         if args.remove:
             handler.remove_dependency(args.remove, True)
-            handler.write_installed_deps_file()
             exit(0)
         if args.remove_all:
             for k in handler.installed_deps.copy():
                 handler.remove_dependency(k, False)
-            handler.write_installed_deps_file()
             exit(0)
         if args.source_only:
             handler.set_source_only(True)

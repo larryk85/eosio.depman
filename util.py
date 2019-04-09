@@ -35,15 +35,21 @@ def is_owner_for_dir(path):
     except FileNotFoundError:
         path = head
         pass
+    
+    while True:
+        head, tail = os.path.split(path)
+        if head == path:
+            break
+        path = head
 
-    for sp in os.path.split(path):
-        try:
-            if os.stat(sp[0]).st_uid == os.geteuid():
-                return True
-        except FileNotFoundError:
-            path = sp[0]
-            err.log(path)
-            continue
+        if os.path.isdir(head):
+            try:
+                if os.stat(head).st_uid == os.geteuid():
+                    return True
+            except FileNotFoundError:
+                path = head
+                err.log(path)
+                continue
 
     return False
 
